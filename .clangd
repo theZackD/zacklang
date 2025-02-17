@@ -1,0 +1,8 @@
+CompileFlags:
+  Add: [
+    "-I/opt/homebrew/opt/llvm/include",
+    "-D__STDC_CONSTANT_MACROS",
+    "-D__STDC_FORMAT_MACROS",
+    "-D__STDC_LIMIT_MACROS"
+  ]
+
