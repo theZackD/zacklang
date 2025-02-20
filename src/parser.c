@@ -2,16 +2,394 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
-// --- Utility Functions ---
-
+// Initialize parser
 Parser init_parser(TokenArray tokens)
 {
-  Parser parser;
-  parser.tokens = tokens;
-  parser.current = 0;
+  Parser parser = {
+      .tokens = tokens,
+      .current = 0,
+      .had_error = 0,
+      .error_msg = NULL};
   return parser;
 }
+
+// Helper functions
+Token *peek(Parser *parser)
+{
+  return &parser->tokens.tokens[parser->current];
+}
+
+Token *advance(Parser *parser)
+{
+  if (!is_at_end(parser))
+    parser->current++;
+  return previous(parser);
+}
+
+Token *previous(Parser *parser)
+{
+  return &parser->tokens.tokens[parser->current - 1];
+}
+
+bool is_at_end(Parser *parser)
+{
+  return peek(parser)->type == TOKEN_EOF;
+}
+
+bool check(Parser *parser, TokenType type)
+{
+  if (is_at_end(parser))
+    return false;
+  return peek(parser)->type == type;
+}
+
+bool match(Parser *parser, TokenType type)
+{
+  if (check(parser, type))
+  {
+    advance(parser);
+    return true;
+  }
+  return false;
+}
+
+void consume(Parser *parser, TokenType type, const char *message)
+{
+  if (check(parser, type))
+  {
+    advance(parser);
+    return;
+  }
+
+  error(parser, message);
+}
+
+void error(Parser *parser, const char *message)
+{
+  if (parser->error_msg)
+    free(parser->error_msg);
+  parser->error_msg = strdup(message);
+  parser->had_error = 1;
+}
+
+// Synchronize after error
+static void synchronize(Parser *parser)
+{
+  advance(parser);
+
+  while (!is_at_end(parser))
+  {
+    if (previous(parser)->type == TOKEN_SEMICOLON)
+      return;
+
+    switch (peek(parser)->type)
+    {
+    case TOKEN_KEYWORD:
+      // Synchronize on statement keywords
+      if (strcmp(peek(parser)->value, "fn") == 0 ||
+          strcmp(peek(parser)->value, "let") == 0 ||
+          strcmp(peek(parser)->value, "if") == 0 ||
+          strcmp(peek(parser)->value, "while") == 0 ||
+          strcmp(peek(parser)->value, "return") == 0)
+      {
+        return;
+      }
+      break;
+    default:
+      break;
+    }
+
+    advance(parser);
+  }
+}
+
+// Parse a complete program
+ASTNode *parse_program(Parser *parser)
+{
+  // Create a block to hold all top-level statements
+  ASTNode **statements = NULL;
+  int stmt_count = 0;
+  int capacity = 0;
+
+  while (!is_at_end(parser))
+  {
+    // Expand statements array if needed
+    if (stmt_count >= capacity)
+    {
+      capacity = capacity == 0 ? 8 : capacity * 2;
+      statements = realloc(statements, capacity * sizeof(ASTNode *));
+    }
+
+    // Parse next statement
+    ASTNode *stmt = parse_statement(parser);
+    if (stmt)
+    {
+      statements[stmt_count++] = stmt;
+    }
+
+    // Handle error recovery
+    if (parser->had_error)
+    {
+      synchronize(parser);
+      parser->had_error = 0;
+      free(parser->error_msg);
+      parser->error_msg = NULL;
+    }
+  }
+
+  // Create and return block node
+  return create_block(statements, stmt_count);
+}
+
+// Parse a statement
+ASTNode *parse_statement(Parser *parser)
+{
+  Token *token = peek(parser);
+
+  // Check for keywords first
+  if (token->type == TOKEN_KEYWORD)
+  {
+    if (strcmp(token->value, "let") == 0)
+    {
+      return parse_var_decl(parser);
+    }
+    if (strcmp(token->value, "fn") == 0)
+    {
+      return parse_func_def(parser);
+    }
+    if (strcmp(token->value, "if") == 0)
+    {
+      return parse_if_stmt(parser);
+    }
+    if (strcmp(token->value, "while") == 0)
+    {
+      return parse_while_stmt(parser);
+    }
+    if (strcmp(token->value, "for") == 0)
+    {
+      return parse_for_stmt(parser);
+    }
+    if (strcmp(token->value, "return") == 0)
+    {
+      return parse_return_stmt(parser);
+    }
+    if (strcmp(token->value, "print") == 0)
+    {
+      return parse_print_stmt(parser);
+    }
+  }
+
+  // If not a keyword, must be an expression statement
+  ASTNode *expr = parse_expression(parser);
+  consume(parser, TOKEN_SEMICOLON, "Expected ';' after expression.");
+  return create_expr_stmt(expr);
+}
+
+// Expression parsing functions in order of precedence
+ASTNode *parse_assignment(Parser *parser)
+{
+  ASTNode *expr = parse_logical_or(parser);
+
+  if (match(parser, TOKEN_OPERATOR) && strcmp(previous(parser)->value, "=") == 0)
+  {
+    ASTNode *value = parse_assignment(parser); // Right associative
+
+    // Validate assignment target
+    if (expr->type == AST_IDENTIFIER)
+    {
+      return create_assign_expr(expr, value);
+    }
+
+    error(parser, "Invalid assignment target");
+  }
+
+  return expr;
+}
+
+ASTNode *parse_logical_or(Parser *parser)
+{
+  ASTNode *expr = parse_logical_and(parser);
+
+  while (match(parser, TOKEN_KEYWORD) && strcmp(previous(parser)->value, "or") == 0)
+  {
+    ASTNode *right = parse_logical_and(parser);
+    expr = create_binary_expr("or", expr, right);
+  }
+
+  return expr;
+}
+
+ASTNode *parse_logical_and(Parser *parser)
+{
+  ASTNode *expr = parse_equality(parser);
+
+  while (match(parser, TOKEN_KEYWORD) && strcmp(previous(parser)->value, "and") == 0)
+  {
+    ASTNode *right = parse_equality(parser);
+    expr = create_binary_expr("and", expr, right);
+  }
+
+  return expr;
+}
+
+ASTNode *parse_equality(Parser *parser)
+{
+  ASTNode *expr = parse_comparison(parser);
+
+  while (match(parser, TOKEN_OPERATOR) &&
+         (strcmp(previous(parser)->value, "==") == 0 ||
+          strcmp(previous(parser)->value, "!=") == 0))
+  {
+    char *op = strdup(previous(parser)->value);
+    ASTNode *right = parse_comparison(parser);
+    expr = create_binary_expr(op, expr, right);
+    free(op);
+  }
+
+  return expr;
+}
+
+ASTNode *parse_comparison(Parser *parser)
+{
+  ASTNode *expr = parse_term(parser);
+
+  while (match(parser, TOKEN_OPERATOR) &&
+         (strcmp(previous(parser)->value, "<") == 0 ||
+          strcmp(previous(parser)->value, ">") == 0 ||
+          strcmp(previous(parser)->value, "<=") == 0 ||
+          strcmp(previous(parser)->value, ">=") == 0))
+  {
+    char *op = strdup(previous(parser)->value);
+    ASTNode *right = parse_term(parser);
+    expr = create_binary_expr(op, expr, right);
+    free(op);
+  }
+
+  return expr;
+}
+
+ASTNode *parse_term(Parser *parser)
+{
+  ASTNode *expr = parse_factor(parser);
+
+  while (match(parser, TOKEN_OPERATOR) &&
+         (strcmp(previous(parser)->value, "+") == 0 ||
+          strcmp(previous(parser)->value, "-") == 0))
+  {
+    char *op = strdup(previous(parser)->value);
+    ASTNode *right = parse_factor(parser);
+    expr = create_binary_expr(op, expr, right);
+    free(op);
+  }
+
+  return expr;
+}
+
+ASTNode *parse_factor(Parser *parser)
+{
+  ASTNode *expr = parse_unary(parser);
+
+  while (match(parser, TOKEN_OPERATOR) &&
+         (strcmp(previous(parser)->value, "*") == 0 ||
+          strcmp(previous(parser)->value, "/") == 0 ||
+          strcmp(previous(parser)->value, "%") == 0 ||
+          strcmp(previous(parser)->value, "**") == 0))
+  {
+    char *op = strdup(previous(parser)->value);
+    ASTNode *right = parse_unary(parser);
+    expr = create_binary_expr(op, expr, right);
+    free(op);
+  }
+
+  return expr;
+}
+
+ASTNode *parse_unary(Parser *parser)
+{
+  if (match(parser, TOKEN_OPERATOR) &&
+      (strcmp(previous(parser)->value, "-") == 0 ||
+       strcmp(previous(parser)->value, "+") == 0))
+  {
+    char *op = strdup(previous(parser)->value);
+    ASTNode *right = parse_unary(parser);
+    ASTNode *expr = create_unary_expr(op, right);
+    free(op);
+    return expr;
+  }
+
+  if (match(parser, TOKEN_KEYWORD) && strcmp(previous(parser)->value, "not") == 0)
+  {
+    ASTNode *right = parse_unary(parser);
+    return create_unary_expr("not", right);
+  }
+
+  return parse_primary(parser);
+}
+
+ASTNode *parse_primary(Parser *parser)
+{
+  if (match(parser, TOKEN_INTEGER) || match(parser, TOKEN_FLOAT) ||
+      match(parser, TOKEN_STRING))
+  {
+    return create_literal(previous(parser)->value);
+  }
+
+  if (match(parser, TOKEN_KEYWORD))
+  {
+    if (strcmp(previous(parser)->value, "true") == 0 ||
+        strcmp(previous(parser)->value, "false") == 0)
+    {
+      return create_literal(previous(parser)->value);
+    }
+  }
+
+  if (match(parser, TOKEN_IDENTIFIER))
+  {
+    char *name = strdup(previous(parser)->value);
+
+    // Check for function call
+    if (match(parser, TOKEN_LPAREN))
+    {
+      ASTNode **arguments = NULL;
+      int arg_count = 0;
+
+      // Parse arguments
+      if (!check(parser, TOKEN_RPAREN))
+      {
+        do
+        {
+          // Expand arguments array
+          arguments = realloc(arguments, (arg_count + 1) * sizeof(ASTNode *));
+          arguments[arg_count++] = parse_expression(parser);
+        } while (match(parser, TOKEN_COMMA));
+      }
+
+      consume(parser, TOKEN_RPAREN, "Expected ')' after arguments");
+      ASTNode *call = create_func_call(name, arguments, arg_count);
+      free(name);
+      return call;
+    }
+
+    // Simple identifier
+    ASTNode *id = create_identifier(name);
+    free(name);
+    return id;
+  }
+
+  if (match(parser, TOKEN_LPAREN))
+  {
+    ASTNode *expr = parse_expression(parser);
+    consume(parser, TOKEN_RPAREN, "Expected ')' after expression");
+    return expr;
+  }
+
+  error(parser, "Expected expression");
+  return NULL;
+}
+
+// --- Utility Functions ---
 
 Token *peek(Parser *parser) { return &parser->tokens.tokens[parser->current]; }
 
@@ -193,74 +571,153 @@ ASTNode *parse_expression_stmt(Parser *parser)
 
 ASTNode *parse_var_decl(Parser *parser)
 {
-  // Expect "let"
-  if (peek(parser)->type != TOKEN_KEYWORD ||
-      strcmp(peek(parser)->value, "let") != 0)
-    error(parser, "Expected 'let' in variable declaration");
-  advance(parser); // consume "let"
+  consume(parser, TOKEN_KEYWORD, "Expected 'let' keyword");
 
+  // Check for const
   int is_const = 0;
-  if (peek(parser)->type == TOKEN_KEYWORD &&
-      strcmp(peek(parser)->value, "const") == 0)
+  if (match(parser, TOKEN_KEYWORD) && strcmp(previous(parser)->value, "const") == 0)
   {
     is_const = 1;
-    advance(parser); // consume "const"
   }
 
-  if (peek(parser)->type != TOKEN_IDENTIFIER)
-    error(parser, "Expected identifier in variable declaration");
-  char *identifier = strdup(peek(parser)->value);
-  advance(parser);
+  // Parse identifier
+  if (!match(parser, TOKEN_IDENTIFIER))
+  {
+    error(parser, "Expected variable name");
+    return NULL;
+  }
+  char *name = strdup(previous(parser)->value);
 
-  char *type_annotation = NULL;
+  // Parse optional type annotation
+  char *type = NULL;
   if (match(parser, TOKEN_COLON))
   {
-    if (peek(parser)->type != TOKEN_KEYWORD)
-      error(parser, "Expected type keyword after ':'");
-    type_annotation = strdup(peek(parser)->value);
-    advance(parser);
+    if (!match(parser, TOKEN_KEYWORD))
+    {
+      error(parser, "Expected type after ':'");
+      free(name);
+      return NULL;
+    }
+    type = strdup(previous(parser)->value);
   }
 
-  // Expect '=' operator
-  if (peek(parser)->type != TOKEN_OPERATOR ||
-      strcmp(peek(parser)->value, "=") != 0)
-    error(parser, "Expected '=' in variable declaration");
-  advance(parser); // consume '='
+  // Parse initializer
+  consume(parser, TOKEN_OPERATOR, "Expected '=' after variable declaration");
+  if (strcmp(previous(parser)->value, "=") != 0)
+  {
+    error(parser, "Expected '=' after variable declaration");
+    free(name);
+    free(type);
+    return NULL;
+  }
 
   ASTNode *initializer = parse_expression(parser);
+  if (!initializer)
+  {
+    free(name);
+    free(type);
+    return NULL;
+  }
 
-  if (!match(parser, TOKEN_SEMICOLON))
-    error(parser, "Expected ';' after variable declaration");
+  consume(parser, TOKEN_SEMICOLON, "Expected ';' after variable declaration");
 
-  return create_var_decl(is_const, identifier, type_annotation, initializer);
+  return create_var_decl(is_const, name, type, initializer);
 }
 
 // --- If Statement ---
 
 ASTNode *parse_if_stmt(Parser *parser)
 {
-  if (peek(parser)->type != TOKEN_KEYWORD ||
-      strcmp(peek(parser)->value, "if") != 0)
-    error(parser, "Expected 'if' keyword");
-  advance(parser); // consume "if"
+  consume(parser, TOKEN_KEYWORD, "Expected 'if' keyword");
+  consume(parser, TOKEN_LPAREN, "Expected '(' after 'if'");
 
-  if (!match(parser, TOKEN_LPAREN))
-    error(parser, "Expected '(' after 'if'");
   ASTNode *condition = parse_expression(parser);
-  if (!match(parser, TOKEN_RPAREN))
-    error(parser, "Expected ')' after if condition");
-
-  ASTNode *if_block = parse_statement(parser);
-
-  // Optional else branch
-  ASTNode *else_block = NULL;
-  if (peek(parser)->type == TOKEN_KEYWORD &&
-      strcmp(peek(parser)->value, "else") == 0)
+  if (!condition)
   {
-    advance(parser); // consume "else"
-    else_block = parse_statement(parser);
+    error(parser, "Expected condition in if statement");
+    return NULL;
   }
-  return create_if_stmt(condition, if_block, else_block);
+
+  consume(parser, TOKEN_RPAREN, "Expected ')' after condition");
+
+  ASTNode *if_block = parse_block(parser);
+  if (!if_block)
+  {
+    free_ast(condition);
+    return NULL;
+  }
+
+  // Parse elif blocks
+  ASTNode **elif_conds = NULL;
+  ASTNode **elif_blocks = NULL;
+  int elif_count = 0;
+
+  while (match(parser, TOKEN_KEYWORD) && strcmp(previous(parser)->value, "elif") == 0)
+  {
+    consume(parser, TOKEN_LPAREN, "Expected '(' after 'elif'");
+
+    ASTNode *elif_cond = parse_expression(parser);
+    if (!elif_cond)
+    {
+      error(parser, "Expected condition in elif statement");
+      free_ast(condition);
+      free_ast(if_block);
+      for (int i = 0; i < elif_count; i++)
+      {
+        free_ast(elif_conds[i]);
+        free_ast(elif_blocks[i]);
+      }
+      free(elif_conds);
+      free(elif_blocks);
+      return NULL;
+    }
+
+    consume(parser, TOKEN_RPAREN, "Expected ')' after elif condition");
+
+    ASTNode *elif_block = parse_block(parser);
+    if (!elif_block)
+    {
+      free_ast(elif_cond);
+      free_ast(condition);
+      free_ast(if_block);
+      for (int i = 0; i < elif_count; i++)
+      {
+        free_ast(elif_conds[i]);
+        free_ast(elif_blocks[i]);
+      }
+      free(elif_conds);
+      free(elif_blocks);
+      return NULL;
+    }
+
+    elif_conds = realloc(elif_conds, (elif_count + 1) * sizeof(ASTNode *));
+    elif_blocks = realloc(elif_blocks, (elif_count + 1) * sizeof(ASTNode *));
+    elif_conds[elif_count] = elif_cond;
+    elif_blocks[elif_count] = elif_block;
+    elif_count++;
+  }
+
+  // Parse optional else block
+  ASTNode *else_block = NULL;
+  if (match(parser, TOKEN_KEYWORD) && strcmp(previous(parser)->value, "else") == 0)
+  {
+    else_block = parse_block(parser);
+    if (!else_block)
+    {
+      free_ast(condition);
+      free_ast(if_block);
+      for (int i = 0; i < elif_count; i++)
+      {
+        free_ast(elif_conds[i]);
+        free_ast(elif_blocks[i]);
+      }
+      free(elif_conds);
+      free(elif_blocks);
+      return NULL;
+    }
+  }
+
+  return create_if_stmt(condition, if_block, elif_conds, elif_blocks, elif_count, else_block);
 }
 
 // --- Switch Statement ---
@@ -275,149 +732,202 @@ ASTNode *parse_switch_stmt(Parser *parser)
 
 ASTNode *parse_while_stmt(Parser *parser)
 {
-  if (peek(parser)->type != TOKEN_KEYWORD ||
-      strcmp(peek(parser)->value, "while") != 0)
-    error(parser, "Expected 'while' keyword");
-  advance(parser); // consume "while"
-  if (!match(parser, TOKEN_LPAREN))
-    error(parser, "Expected '(' after 'while'");
+  consume(parser, TOKEN_KEYWORD, "Expected 'while' keyword");
+  consume(parser, TOKEN_LPAREN, "Expected '(' after 'while'");
+
   ASTNode *condition = parse_expression(parser);
-  if (!match(parser, TOKEN_RPAREN))
-    error(parser, "Expected ')' after while condition");
-  ASTNode *block = parse_statement(parser);
-  return create_while_stmt(condition, block);
+  if (!condition)
+  {
+    error(parser, "Expected condition in while statement");
+    return NULL;
+  }
+
+  consume(parser, TOKEN_RPAREN, "Expected ')' after condition");
+
+  ASTNode *body = parse_block(parser);
+  if (!body)
+  {
+    free_ast(condition);
+    return NULL;
+  }
+
+  return create_while_stmt(condition, body);
 }
 
 // --- For Loop ---
 
 ASTNode *parse_for_stmt(Parser *parser)
 {
-  if (peek(parser)->type != TOKEN_KEYWORD ||
-      strcmp(peek(parser)->value, "for") != 0)
-    error(parser, "Expected 'for' keyword");
-  advance(parser); // consume "for"
-  if (!match(parser, TOKEN_LPAREN))
-    error(parser, "Expected '(' after 'for'");
+  consume(parser, TOKEN_KEYWORD, "Expected 'for' keyword");
+  consume(parser, TOKEN_LPAREN, "Expected '(' after 'for'");
 
-  if (peek(parser)->type != TOKEN_IDENTIFIER)
-    error(parser, "Expected identifier in for loop");
-  char *iterator = strdup(peek(parser)->value);
-  advance(parser);
+  // Parse iterator variable
+  if (!match(parser, TOKEN_IDENTIFIER))
+  {
+    error(parser, "Expected iterator variable name");
+    return NULL;
+  }
+  char *iterator = strdup(previous(parser)->value);
 
-  if (!(peek(parser)->type == TOKEN_KEYWORD &&
-        strcmp(peek(parser)->value, "in") == 0))
-    error(parser, "Expected 'in' in for loop");
-  advance(parser); // consume "in"
+  consume(parser, TOKEN_KEYWORD, "Expected 'in' keyword");
+  if (strcmp(previous(parser)->value, "in") != 0)
+  {
+    error(parser, "Expected 'in' keyword");
+    free(iterator);
+    return NULL;
+  }
 
-  if (!match(parser, TOKEN_LBRACE))
-    error(parser, "Expected '{' in for loop range");
+  consume(parser, TOKEN_LBRACE, "Expected '{' after 'in'");
 
-  ASTNode *start_expr = parse_expression(parser);
-  if (!match(parser, TOKEN_COLON))
-    error(parser, "Expected ':' in for loop range");
-  ASTNode *end_expr = parse_expression(parser);
-  if (!match(parser, TOKEN_RBRACE))
-    error(parser, "Expected '}' in for loop range");
-  if (!match(parser, TOKEN_RPAREN))
-    error(parser, "Expected ')' after for loop range");
+  // Parse range start
+  ASTNode *start = parse_expression(parser);
+  if (!start)
+  {
+    error(parser, "Expected range start expression");
+    free(iterator);
+    return NULL;
+  }
 
-  ASTNode *block = parse_statement(parser);
-  return create_for_stmt(iterator, start_expr, end_expr, block);
+  consume(parser, TOKEN_COLON, "Expected ':' in range");
+
+  // Parse range end
+  ASTNode *end = parse_expression(parser);
+  if (!end)
+  {
+    error(parser, "Expected range end expression");
+    free(iterator);
+    free_ast(start);
+    return NULL;
+  }
+
+  consume(parser, TOKEN_RBRACE, "Expected '}' after range");
+  consume(parser, TOKEN_RPAREN, "Expected ')' after for loop header");
+
+  // Parse loop body
+  ASTNode *body = parse_block(parser);
+  if (!body)
+  {
+    free(iterator);
+    free_ast(start);
+    free_ast(end);
+    return NULL;
+  }
+
+  return create_for_stmt(iterator, start, end, body);
 }
 
 // --- Function Definition ---
 
 ASTNode *parse_func_def(Parser *parser)
 {
-  // Optionally consume "comptime"
-  if (peek(parser)->type == TOKEN_KEYWORD &&
-      strcmp(peek(parser)->value, "comptime") == 0)
-    advance(parser);
+  // Check for comptime
+  int is_comptime = 0;
+  if (match(parser, TOKEN_KEYWORD) && strcmp(previous(parser)->value, "comptime") == 0)
+  {
+    is_comptime = 1;
+  }
 
-  if (peek(parser)->type != TOKEN_KEYWORD ||
-      strcmp(peek(parser)->value, "fn") != 0)
-    error(parser, "Expected 'fn' keyword for function definition");
-  advance(parser); // consume "fn"
+  // Parse fn keyword
+  consume(parser, TOKEN_KEYWORD, "Expected 'fn' keyword");
+  if (strcmp(previous(parser)->value, "fn") != 0)
+  {
+    error(parser, "Expected 'fn' keyword");
+    return NULL;
+  }
 
-  if (peek(parser)->type != TOKEN_IDENTIFIER)
+  // Parse function name
+  if (!match(parser, TOKEN_IDENTIFIER))
+  {
     error(parser, "Expected function name");
-  char *name = strdup(peek(parser)->value);
-  advance(parser);
-
-  if (!match(parser, TOKEN_LPAREN))
-    error(parser, "Expected '(' after function name");
+    return NULL;
+  }
+  char *name = strdup(previous(parser)->value);
 
   // Parse parameter list
+  consume(parser, TOKEN_LPAREN, "Expected '(' after function name");
+
   ASTNode **parameters = NULL;
   int param_count = 0;
-  int param_capacity = 4;
-  parameters = malloc(param_capacity * sizeof(ASTNode *));
-  if (!parameters)
-    error(parser, "Memory allocation failed for function parameters");
 
-  // Parse parameters until we find a closing parenthesis
-  if (peek(parser)->type != TOKEN_RPAREN)
+  if (!check(parser, TOKEN_RPAREN))
   {
     do
     {
-      if (peek(parser)->type != TOKEN_IDENTIFIER)
+      // Parse parameter name
+      if (!match(parser, TOKEN_IDENTIFIER))
+      {
         error(parser, "Expected parameter name");
-      char *param_name = strdup(peek(parser)->value);
-      advance(parser);
+        free(name);
+        // Free already parsed parameters
+        for (int i = 0; i < param_count; i++)
+        {
+          free_ast(parameters[i]);
+        }
+        free(parameters);
+        return NULL;
+      }
+      char *param_name = strdup(previous(parser)->value);
 
-      if (!match(parser, TOKEN_COLON))
-        error(parser, "Expected ':' after parameter name");
-
-      if (peek(parser)->type != TOKEN_KEYWORD)
+      // Parse parameter type
+      consume(parser, TOKEN_COLON, "Expected ':' after parameter name");
+      if (!match(parser, TOKEN_KEYWORD))
+      {
         error(parser, "Expected parameter type");
-      char *param_type = strdup(peek(parser)->value);
-      advance(parser);
+        free(name);
+        free(param_name);
+        for (int i = 0; i < param_count; i++)
+        {
+          free_ast(parameters[i]);
+        }
+        free(parameters);
+        return NULL;
+      }
+      char *param_type = strdup(previous(parser)->value);
 
-      // Create parameter node
-      ASTNode *param = create_var_decl(0, param_name, param_type, NULL);
+      // Create parameter node (as a var_decl)
+      parameters = realloc(parameters, (param_count + 1) * sizeof(ASTNode *));
+      parameters[param_count++] = create_var_decl(0, param_name, param_type, NULL);
+
       free(param_name);
       free(param_type);
-
-      // Add parameter to array
-      if (param_count >= param_capacity)
-      {
-        param_capacity *= 2;
-        ASTNode **temp = realloc(parameters, param_capacity * sizeof(ASTNode *));
-        if (!temp)
-        {
-          free(parameters);
-          error(parser, "Memory reallocation failed for function parameters");
-        }
-        parameters = temp;
-      }
-      parameters[param_count++] = param;
-
-      // Check for comma
-      if (peek(parser)->type == TOKEN_OPERATOR &&
-          strcmp(peek(parser)->value, ",") == 0)
-      {
-        advance(parser);
-      }
-      else
-      {
-        break;
-      }
-    } while (1);
+    } while (match(parser, TOKEN_COMMA));
   }
 
-  if (!match(parser, TOKEN_RPAREN))
-    error(parser, "Expected ')' after parameter list");
+  consume(parser, TOKEN_RPAREN, "Expected ')' after parameters");
 
+  // Parse optional return type
   char *return_type = NULL;
   if (match(parser, TOKEN_COLON))
   {
-    if (peek(parser)->type != TOKEN_KEYWORD)
+    if (!match(parser, TOKEN_KEYWORD))
+    {
       error(parser, "Expected return type after ':'");
-    return_type = strdup(peek(parser)->value);
-    advance(parser);
+      free(name);
+      for (int i = 0; i < param_count; i++)
+      {
+        free_ast(parameters[i]);
+      }
+      free(parameters);
+      return NULL;
+    }
+    return_type = strdup(previous(parser)->value);
   }
-  ASTNode *body = parse_statement(parser);
-  return create_func_def(name, parameters, param_count, return_type, body);
+
+  // Parse function body
+  ASTNode *body = parse_block(parser);
+  if (!body)
+  {
+    free(name);
+    free(return_type);
+    for (int i = 0; i < param_count; i++)
+    {
+      free_ast(parameters[i]);
+    }
+    free(parameters);
+    return NULL;
+  }
+
+  return create_func_def(name, parameters, param_count, return_type, body, is_comptime);
 }
 
 // --- Break Statement ---
@@ -452,274 +962,27 @@ ASTNode *parse_continue_stmt(Parser *parser)
 
 ASTNode *parse_expression(Parser *parser) { return parse_assignment(parser); }
 
-ASTNode *parse_assignment(Parser *parser)
-{
-  ASTNode *left = parse_logical_or(parser);
-  if (peek(parser)->type == TOKEN_OPERATOR &&
-      strcmp(peek(parser)->value, "=") == 0)
-  {
-    advance(parser); // consume "="
-    ASTNode *right = parse_assignment(parser);
-    return create_assign_expr(left, right);
-  }
-  return left;
-}
-
-ASTNode *parse_logical_or(Parser *parser)
-{
-  ASTNode *left = parse_logical_and(parser);
-  while (peek(parser)->type == TOKEN_KEYWORD &&
-         strcmp(peek(parser)->value, "or") == 0)
-  {
-    char *op = strdup("or");
-    advance(parser);
-    ASTNode *right = parse_logical_and(parser);
-    left = create_binary_expr(op, left, right);
-  }
-  return left;
-}
-
-ASTNode *parse_logical_and(Parser *parser)
-{
-  ASTNode *left = parse_equality(parser);
-  while (peek(parser)->type == TOKEN_KEYWORD &&
-         strcmp(peek(parser)->value, "and") == 0)
-  {
-    char *op = strdup("and");
-    advance(parser);
-    ASTNode *right = parse_equality(parser);
-    left = create_binary_expr(op, left, right);
-  }
-  return left;
-}
-
-ASTNode *parse_equality(Parser *parser)
-{
-  ASTNode *left = parse_relational(parser);
-  while (peek(parser)->type == TOKEN_OPERATOR &&
-         (strcmp(peek(parser)->value, "==") == 0 ||
-          strcmp(peek(parser)->value, "!=") == 0))
-  {
-    char *op = strdup(peek(parser)->value);
-    advance(parser);
-    ASTNode *right = parse_relational(parser);
-    left = create_binary_expr(op, left, right);
-  }
-  return left;
-}
-
-ASTNode *parse_relational(Parser *parser)
-{
-  ASTNode *left = parse_additive(parser);
-  while (peek(parser)->type == TOKEN_OPERATOR &&
-         (strcmp(peek(parser)->value, "<") == 0 ||
-          strcmp(peek(parser)->value, ">") == 0 ||
-          strcmp(peek(parser)->value, "<=") == 0 ||
-          strcmp(peek(parser)->value, ">=") == 0))
-  {
-    char *op = strdup(peek(parser)->value);
-    advance(parser);
-    ASTNode *right = parse_additive(parser);
-    left = create_binary_expr(op, left, right);
-  }
-  return left;
-}
-
-ASTNode *parse_additive(Parser *parser)
-{
-  ASTNode *left = parse_multiplicative(parser);
-  while (peek(parser)->type == TOKEN_OPERATOR &&
-         (strcmp(peek(parser)->value, "+") == 0 ||
-          strcmp(peek(parser)->value, "-") == 0))
-  {
-    char *op = strdup(peek(parser)->value);
-    advance(parser);
-    ASTNode *right = parse_multiplicative(parser);
-    left = create_binary_expr(op, left, right);
-  }
-  return left;
-}
-
-ASTNode *parse_multiplicative(Parser *parser)
-{
-  ASTNode *left = parse_unary(parser);
-  while (peek(parser)->type == TOKEN_OPERATOR &&
-         (strcmp(peek(parser)->value, "*") == 0 ||
-          strcmp(peek(parser)->value, "/") == 0 ||
-          strcmp(peek(parser)->value, "%") == 0))
-  {
-    char *op = strdup(peek(parser)->value);
-    advance(parser);
-    ASTNode *right = parse_unary(parser);
-    left = create_binary_expr(op, left, right);
-  }
-  return left;
-}
-
-ASTNode *parse_unary(Parser *parser)
-{
-  Token *token = peek(parser);
-  if ((token->type == TOKEN_OPERATOR &&
-       (strcmp(token->value, "-") == 0 || strcmp(token->value, "+") == 0)) ||
-      (token->type == TOKEN_KEYWORD && strcmp(token->value, "not") == 0))
-  {
-    char *op = strdup(token->value);
-    advance(parser);
-    ASTNode *operand = parse_unary(parser);
-    return create_unary_expr(op, operand);
-  }
-  return parse_primary(parser);
-}
-
-ASTNode *parse_primary(Parser *parser)
-{
-  Token *token = peek(parser);
-  if (token->type == TOKEN_IDENTIFIER)
-  {
-    char *name = strdup(token->value);
-    advance(parser);
-    // If next token is "(", parse as function call.
-    if (peek(parser)->type == TOKEN_LPAREN)
-    {
-      advance(parser); // consume "("
-      ASTNode **arguments = NULL;
-      int arg_count = 0;
-      int arg_capacity = 4;
-      arguments = malloc(arg_capacity * sizeof(ASTNode *));
-      if (!arguments)
-        error(parser, "Memory allocation failed for function call arguments");
-      // Parse arguments until ")".
-      if (peek(parser)->type != TOKEN_RPAREN)
-      {
-        do
-        {
-          ASTNode *arg = parse_expression(parser);
-          if (!arg)
-            break;
-          if (arg_count >= arg_capacity)
-          {
-            arg_capacity *= 2;
-            ASTNode **temp =
-                realloc(arguments, arg_capacity * sizeof(ASTNode *));
-            if (!temp)
-            {
-              free(arguments);
-              error(parser,
-                    "Memory reallocation failed for function call arguments");
-            }
-            arguments = temp;
-          }
-          arguments[arg_count++] = arg;
-          if (peek(parser)->type == TOKEN_OPERATOR &&
-              strcmp(peek(parser)->value, ",") == 0)
-            advance(parser);
-          else
-            break;
-        } while (1);
-      }
-      if (!match(parser, TOKEN_RPAREN))
-        error(parser, "Expected ')' after function call arguments");
-      return create_func_call(name, arguments, arg_count);
-    }
-    return create_identifier(name);
-  }
-  else if (token->type == TOKEN_INTEGER || token->type == TOKEN_FLOAT)
-  {
-    char *value = strdup(token->value);
-    advance(parser);
-    return create_literal(value);
-  }
-  else if (token->type == TOKEN_STRING || token->type == TOKEN_FSTRING)
-  {
-    char *value = strdup(token->value);
-    advance(parser);
-    return create_literal(value);
-  }
-  else if (token->type == TOKEN_KEYWORD &&
-           (strcmp(token->value, "true") == 0 || strcmp(token->value, "false") == 0))
-  {
-    char *value = strdup(token->value);
-    advance(parser);
-    return create_literal(value);
-  }
-  else if (token->type == TOKEN_LPAREN)
-  {
-    advance(parser); // consume "("
-    ASTNode *expr = parse_expression(parser);
-    if (!match(parser, TOKEN_RPAREN))
-      error(parser, "Expected ')' after expression");
-    return expr;
-  }
-  else if (token->type == TOKEN_LBRACE)
-  {
-    return parse_block(parser);
-  }
-  else
-  {
-    error(parser, "Unexpected token in expression");
-    return NULL;
-  }
-}
-
 // Parse a block: "{" { statement } "}"
 ASTNode *parse_block(Parser *parser)
 {
-  if (!match(parser, TOKEN_LBRACE))
-    error(parser, "Expected '{' at start of block");
+  consume(parser, TOKEN_LBRACE, "Expected '{' before block");
 
-  int capacity = 4;
-  int count = 0;
-  ASTNode **statements = malloc(capacity * sizeof(ASTNode *));
-  if (!statements)
-    error(parser, "Memory allocation failed for block statements");
+  ASTNode **statements = NULL;
+  int stmt_count = 0;
 
-  while (peek(parser)->type != TOKEN_RBRACE &&
-         peek(parser)->type != TOKEN_EOF)
+  while (!check(parser, TOKEN_RBRACE) && !is_at_end(parser))
   {
-    ASTNode *stmt;
-    // If we're at the last statement and there's no semicolon, treat it as a return expression
-    Token *next = peek(parser);
-    int is_last_expr = 0;
-
-    // Look ahead to see if this is the last expression in the block
-    if (next->type != TOKEN_KEYWORD && next->type != TOKEN_LBRACE)
+    ASTNode *stmt = parse_statement(parser);
+    if (stmt)
     {
-      Token *ahead = &parser->tokens.tokens[parser->current + 1];
-      if (ahead->type == TOKEN_RBRACE)
-      {
-        is_last_expr = 1;
-        stmt = create_expr_stmt(parse_expression(parser));
-      }
-      else
-      {
-        stmt = parse_statement(parser);
-      }
+      statements = realloc(statements, (stmt_count + 1) * sizeof(ASTNode *));
+      statements[stmt_count++] = stmt;
     }
-    else
-    {
-      stmt = parse_statement(parser);
-    }
-
-    if (!stmt)
-      break;
-
-    if (count >= capacity)
-    {
-      capacity *= 2;
-      ASTNode **temp = realloc(statements, capacity * sizeof(ASTNode *));
-      if (!temp)
-      {
-        free(statements);
-        error(parser, "Memory reallocation failed for block statements");
-      }
-      statements = temp;
-    }
-    statements[count++] = stmt;
   }
-  if (!match(parser, TOKEN_RBRACE))
-    error(parser, "Expected '}' at end of block");
 
-  return create_block(statements, count);
+  consume(parser, TOKEN_RBRACE, "Expected '}' after block");
+
+  return create_block(statements, stmt_count);
 }
 
 // --- Expression Parsing End ---

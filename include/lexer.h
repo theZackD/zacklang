@@ -19,6 +19,7 @@ typedef enum
   TOKEN_RBRACKET,   // ]
   TOKEN_SEMICOLON,  // ;
   TOKEN_COLON,      // :
+  TOKEN_COMMA,      // ,
   TOKEN_EOF         // End of file
 } TokenType;
 
