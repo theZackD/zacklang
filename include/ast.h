@@ -168,7 +168,6 @@ struct ASTNode
     {
       ASTNode **elements; // Array of expression nodes
       int element_count;
-      Type *element_type; // Type of array elements
     } array_literal;
 
     // Array indexing: array[index]

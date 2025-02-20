@@ -14,7 +14,6 @@ typedef enum
     TYPE_CHAR,
     TYPE_STRING,
     TYPE_VOID,
-    TYPE_ARRAY,  // New: array type
     TYPE_STRUCT, // New: struct type
     TYPE_UNKNOWN,
     TYPE_ERROR
@@ -26,12 +25,6 @@ typedef struct StructField
     char *name;
     struct Type *type;
 } StructField;
-
-// Structure to represent array type info
-typedef struct ArrayTypeInfo
-{
-    struct Type *element_type;
-} ArrayTypeInfo;
 
 // Structure to represent a struct type
 typedef struct StructType
@@ -49,8 +42,7 @@ typedef struct Type
     bool is_comptime; // Whether the value must be known at compile time
     union
     {
-        StructType *struct_info;   // For TYPE_STRUCT
-        ArrayTypeInfo *array_info; // For TYPE_ARRAY
+        StructType *struct_info; // For TYPE_STRUCT
     } info;
 } Type;
 

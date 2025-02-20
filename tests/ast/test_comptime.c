@@ -216,87 +216,6 @@ void test_error_cases(void)
     free_ast(invalid_op);
 }
 
-// Test array operations
-void test_array_operations(void)
-{
-    // Test array literal creation
-    ASTNode **elements = malloc(3 * sizeof(ASTNode *));
-    elements[0] = create_literal("1");
-    elements[1] = create_literal("2");
-    elements[2] = create_literal("3");
-    ASTNode *array_lit = create_array_literal(elements, 3);
-
-    // Create array type with i32 elements
-    Type *element_type = create_type(TYPE_I32);
-    element_type->is_comptime = true;
-    array_lit->data.array_literal.element_type = element_type;
-
-    ComptimeValue *result = evaluate_comptime_expr(array_lit);
-    assert(result != NULL);
-    assert(result->type->kind == TYPE_ARRAY);
-    assert(result->value.array_val.length == 3);
-    assert(result->value.array_val.elements[0]->value.i_val == 1);
-    assert(result->value.array_val.elements[1]->value.i_val == 2);
-    assert(result->value.array_val.elements[2]->value.i_val == 3);
-    printf("✓ Array literal evaluation passed\n");
-
-    // Test array indexing
-    ASTNode *index = create_literal("1");
-    ASTNode *array_index = create_array_index(array_lit, index);
-    ComptimeValue *index_result = evaluate_comptime_expr(array_index);
-    assert(index_result != NULL);
-    assert(index_result->type->kind == TYPE_I32);
-    assert(index_result->value.i_val == 2);
-    printf("✓ Array indexing passed\n");
-
-    // Test array length
-    ASTNode *length_call = create_func_call("len", &array_lit, 1);
-    ComptimeValue *length_result = evaluate_comptime_expr(length_call);
-    assert(length_result != NULL);
-    assert(length_result->type->kind == TYPE_I32);
-    assert(length_result->value.i_val == 3);
-    printf("✓ Array length passed\n");
-
-    // Test out of bounds error
-    ASTNode *bad_index = create_literal("5");
-    ASTNode *bad_access = create_array_index(array_lit, bad_index);
-    ComptimeValue *error_result = evaluate_comptime_expr(bad_access);
-    assert(error_result == NULL);
-    printf("✓ Array bounds checking passed\n");
-
-    // Test array of strings
-    ASTNode **str_elements = malloc(2 * sizeof(ASTNode *));
-    str_elements[0] = create_literal("\"hello\"");
-    str_elements[1] = create_literal("\"world\"");
-    ASTNode *str_array = create_array_literal(str_elements, 2);
-
-    // Create array type with string elements
-    Type *str_element_type = create_type(TYPE_STRING);
-    str_element_type->is_comptime = true;
-    str_array->data.array_literal.element_type = str_element_type;
-
-    ComptimeValue *str_result = evaluate_comptime_expr(str_array);
-    assert(str_result != NULL);
-    assert(str_result->type->kind == TYPE_ARRAY);
-    assert(str_result->value.array_val.length == 2);
-    assert(strcmp(str_result->value.array_val.elements[0]->value.s_val, "hello") == 0);
-    assert(strcmp(str_result->value.array_val.elements[1]->value.s_val, "world") == 0);
-    printf("✓ String array evaluation passed\n");
-
-    // Cleanup
-    free_comptime_value(result);
-    free_comptime_value(index_result);
-    free_comptime_value(length_result);
-    free_comptime_value(str_result);
-
-    // Free AST nodes in reverse order of creation
-    free_ast(bad_access);
-    free_ast(length_call);
-    free_ast(array_index);
-    free_ast(str_array);
-    free_ast(array_lit);
-}
-
 int main()
 {
     printf("Running comptime evaluation tests...\n");
@@ -307,7 +226,6 @@ int main()
     test_comparison_operations();
     test_logical_operations();
     test_error_cases();
-    test_array_operations();
 
     printf("All comptime evaluation tests completed!\n");
     return 0;

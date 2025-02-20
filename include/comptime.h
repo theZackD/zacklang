@@ -18,11 +18,6 @@ typedef struct ComptimeValue
         bool b_val;    // For boolean
         char *s_val;   // For strings
         struct
-        { // For arrays
-            struct ComptimeValue **elements;
-            int length;
-        } array_val;
-        struct
         { // For structs
             char *type_name;
             struct ComptimeValue **field_values;
@@ -57,10 +52,5 @@ ComptimeValue *evaluate_comptime_unary_op(const char *op, ComptimeValue *operand
 
 // Convert a literal to a comptime value
 ComptimeValue *literal_to_comptime_value(const char *literal_value, Type *type);
-
-// Array operations
-ComptimeValue *evaluate_array_literal(ASTNode **elements, int count, Type *element_type);
-ComptimeValue *evaluate_array_index(ComptimeValue *array, ComptimeValue *index);
-ComptimeValue *get_array_length(ComptimeValue *array);
 
 #endif // COMPTIME_H

@@ -194,7 +194,6 @@ ASTNode *create_array_literal(ASTNode **elements, int element_count)
   node->type = AST_ARRAY_LITERAL;
   node->data.array_literal.elements = elements;
   node->data.array_literal.element_count = element_count;
-  node->data.array_literal.element_type = NULL; // Initialize to NULL, will be set later
   return node;
 }
 
@@ -410,10 +409,6 @@ void free_ast(ASTNode *node)
       free_ast(node->data.array_literal.elements[i]);
     }
     free(node->data.array_literal.elements);
-    if (node->data.array_literal.element_type)
-    {
-      free_type(node->data.array_literal.element_type);
-    }
     break;
   case AST_ARRAY_INDEX:
     free_ast(node->data.array_index.array);
