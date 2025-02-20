@@ -9,7 +9,7 @@ const char *KEYWORDS[] = {"let", "const", "print", "prompt", "if",
                           "else", "elif", "case", "switch", "finally",
                           "true", "false", "fn", "return", "break",
                           "continue", "while", "for", "and", "or",
-                          "not", "xor", "in", // Primitive types:
+                          "not", "xor", "in", "struct", // Primitive types:
                           "i32", "i64", "f32", "f64", "bool",
                           "char", "string", "void", "comptime"};
 #define NUM_KEYWORDS (sizeof(KEYWORDS) / sizeof(KEYWORDS[0]))
@@ -127,11 +127,61 @@ TokenArray tokenize(const char *code)
     // f-string literal: check for f" prefix.
     if (code[i] == 'f' && code[i + 1] == '"')
     {
-      i++; // Skip the 'f'
-      i++; // Skip the opening quote
+      i += 2; // Skip f"
       size_t start = i;
+
       while (code[i] != '"' && code[i] != '\0')
       {
+        if (code[i] == '{')
+        {
+          // Add the string part before the interpolation if it exists
+          if (i > start)
+          {
+            char *str_part = strndup(&code[start], i - start);
+            add_token(&array, TOKEN_FSTRING, str_part);
+            free(str_part);
+          }
+
+          i++; // Skip {
+          size_t expr_start = i;
+          int brace_count = 1;
+
+          // Find matching }
+          while (code[i] != '\0' && brace_count > 0)
+          {
+            if (code[i] == '{')
+              brace_count++;
+            if (code[i] == '}')
+              brace_count--;
+            i++;
+          }
+
+          if (brace_count > 0)
+          {
+            printf("Lexer Error: Unterminated interpolation in f-string\n");
+            break;
+          }
+
+          i--; // Back up to the closing }
+          // Extract the expression between { and }
+          size_t expr_len = i - expr_start;
+          char *expr = strndup(&code[expr_start], expr_len);
+
+          // Tokenize the expression
+          TokenArray expr_tokens = tokenize(expr);
+          // Add all tokens except EOF from the expression
+          for (int j = 0; j < expr_tokens.count - 1; j++)
+          {
+            add_token(&array, expr_tokens.tokens[j].type, expr_tokens.tokens[j].value);
+          }
+          free_token_array(&expr_tokens);
+          free(expr);
+
+          i++; // Move past the closing }
+          start = i;
+          continue;
+        }
+
         // Handle escape sequences
         if (code[i] == '\\' && code[i + 1] != '\0')
         {
@@ -139,15 +189,23 @@ TokenArray tokenize(const char *code)
         }
         i++;
       }
-      if (code[i] == '\0')
+
+      // Add remaining string part if it exists
+      if (i > start)
       {
-        printf("Lexer Error: Unterminated f-string literal\n");
-        break;
+        char *str_part = strndup(&code[start], i - start);
+        add_token(&array, TOKEN_FSTRING, str_part);
+        free(str_part);
       }
-      char *fstring_val = strndup(&code[start], i - start);
-      add_token(&array, TOKEN_FSTRING, fstring_val);
-      free(fstring_val);
-      i++; // Skip the closing quote
+
+      if (code[i] == '"')
+      {
+        i++;
+      }
+      else
+      {
+        printf("Lexer Error: Unterminated f-string\n");
+      }
       continue;
     }
 

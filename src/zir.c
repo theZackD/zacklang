@@ -4,6 +4,7 @@
 #include <string.h>
 
 #define INITIAL_CAPACITY 8
+#define INITIAL_BLOCK_EDGES_CAPACITY 4
 
 // Helper function for memory allocation with error checking
 static void *safe_malloc(size_t size)
@@ -110,11 +111,26 @@ ZIRBlock *create_zir_block(const char *label)
     block->instr_count = 0;
     block->capacity = INITIAL_CAPACITY;
     block->next = NULL;
+
+    // Initialize predecessor tracking
+    block->predecessors = safe_malloc(INITIAL_BLOCK_EDGES_CAPACITY * sizeof(ZIRBlock *));
+    block->pred_count = 0;
+    block->pred_capacity = INITIAL_BLOCK_EDGES_CAPACITY;
+
+    // Initialize successor tracking
+    block->successors = safe_malloc(INITIAL_BLOCK_EDGES_CAPACITY * sizeof(ZIRBlock *));
+    block->succ_count = 0;
+    block->succ_capacity = INITIAL_BLOCK_EDGES_CAPACITY;
+
     return block;
 }
 
 void zir_block_add_instr(ZIRBlock *block, ZIRValue *instr)
 {
+    if (!block || !instr)
+        return;
+
+    // Add the instruction
     if (block->instr_count >= block->capacity)
     {
         block->capacity *= 2;
@@ -128,6 +144,22 @@ void zir_block_add_instr(ZIRBlock *block, ZIRValue *instr)
         block->instructions = new_instrs;
     }
     block->instructions[block->instr_count++] = instr;
+
+    // Update control flow information based on terminator instructions
+    if (instr->kind == ZIR_BRANCH)
+    {
+        // Add successors for branch instruction
+        zir_block_add_successor(block, instr->data.branch.then_block);
+        if (instr->data.branch.else_block)
+        {
+            zir_block_add_successor(block, instr->data.branch.else_block);
+        }
+    }
+    else if (instr->kind == ZIR_JUMP)
+    {
+        // Add successor for jump instruction
+        zir_block_add_successor(block, instr->data.jump.target);
+    }
 }
 
 // Value creation functions
@@ -236,6 +268,10 @@ ZIRValue *create_zir_branch(ZIRValue *condition, ZIRBlock *then_block, ZIRBlock 
     val->data.branch.condition = condition;
     val->data.branch.then_block = then_block;
     val->data.branch.else_block = else_block;
+
+    // Update control flow information
+    // This will be done when the branch is added to a block via zir_block_add_instr
+
     return val;
 }
 
@@ -247,6 +283,10 @@ ZIRValue *create_zir_jump(ZIRBlock *target)
     // Jump instructions don't have a meaningful type
     ZIRValue *val = create_zir_value(ZIR_JUMP, NULL);
     val->data.jump.target = target;
+
+    // Update control flow information
+    // This will be done when the jump is added to a block via zir_block_add_instr
+
     return val;
 }
 
@@ -395,6 +435,8 @@ void free_zir_block(ZIRBlock *block)
         free_zir_value(block->instructions[i]);
     }
     free(block->instructions);
+    free(block->predecessors);
+    free(block->successors);
     free(block);
 }
 
@@ -558,4 +600,146 @@ bool validate_zir_module(ZIRModule *module)
         }
     }
     return true;
+}
+
+// Add a predecessor to a block
+void zir_block_add_predecessor(ZIRBlock *block, ZIRBlock *pred)
+{
+    if (!block || !pred || zir_block_has_predecessor(block, pred))
+        return;
+
+    // Resize if needed
+    if (block->pred_count >= block->pred_capacity)
+    {
+        block->pred_capacity *= 2;
+        block->predecessors = realloc(block->predecessors,
+                                      block->pred_capacity * sizeof(ZIRBlock *));
+        if (!block->predecessors)
+        {
+            fprintf(stderr, "Memory reallocation failed\n");
+            exit(1);
+        }
+    }
+
+    block->predecessors[block->pred_count++] = pred;
+
+    // Add this block as a successor to pred if not already present
+    if (!zir_block_has_successor(pred, block))
+    {
+        zir_block_add_successor(pred, block);
+    }
+}
+
+// Add a successor to a block
+void zir_block_add_successor(ZIRBlock *block, ZIRBlock *succ)
+{
+    if (!block || !succ || zir_block_has_successor(block, succ))
+        return;
+
+    // Resize if needed
+    if (block->succ_count >= block->succ_capacity)
+    {
+        block->succ_capacity *= 2;
+        block->successors = realloc(block->successors,
+                                    block->succ_capacity * sizeof(ZIRBlock *));
+        if (!block->successors)
+        {
+            fprintf(stderr, "Memory reallocation failed\n");
+            exit(1);
+        }
+    }
+
+    block->successors[block->succ_count++] = succ;
+
+    // Add this block as a predecessor to succ if not already present
+    if (!zir_block_has_predecessor(succ, block))
+    {
+        zir_block_add_predecessor(succ, block);
+    }
+}
+
+// Remove a predecessor from a block
+void zir_block_remove_predecessor(ZIRBlock *block, ZIRBlock *pred)
+{
+    if (!block || !pred)
+        return;
+
+    for (int i = 0; i < block->pred_count; i++)
+    {
+        if (block->predecessors[i] == pred)
+        {
+            // Shift remaining predecessors down
+            for (int j = i; j < block->pred_count - 1; j++)
+            {
+                block->predecessors[j] = block->predecessors[j + 1];
+            }
+            block->pred_count--;
+
+            // Remove this block as a successor from pred if present
+            if (zir_block_has_successor(pred, block))
+            {
+                zir_block_remove_successor(pred, block);
+            }
+            return;
+        }
+    }
+}
+
+// Remove a successor from a block
+void zir_block_remove_successor(ZIRBlock *block, ZIRBlock *succ)
+{
+    if (!block || !succ)
+        return;
+
+    for (int i = 0; i < block->succ_count; i++)
+    {
+        if (block->successors[i] == succ)
+        {
+            // Shift remaining successors down
+            for (int j = i; j < block->succ_count - 1; j++)
+            {
+                block->successors[j] = block->successors[j + 1];
+            }
+            block->succ_count--;
+
+            // Remove this block as a predecessor from succ if present
+            if (zir_block_has_predecessor(succ, block))
+            {
+                zir_block_remove_predecessor(succ, block);
+            }
+            return;
+        }
+    }
+}
+
+// Check if a block has a specific predecessor
+bool zir_block_has_predecessor(ZIRBlock *block, ZIRBlock *pred)
+{
+    if (!block || !pred)
+        return false;
+
+    for (int i = 0; i < block->pred_count; i++)
+    {
+        if (block->predecessors[i] == pred)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Check if a block has a specific successor
+bool zir_block_has_successor(ZIRBlock *block, ZIRBlock *succ)
+{
+    if (!block || !succ)
+        return false;
+
+    for (int i = 0; i < block->succ_count; i++)
+    {
+        if (block->successors[i] == succ)
+        {
+            return true;
+        }
+    }
+    return false;
 }

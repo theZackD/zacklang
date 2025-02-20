@@ -6,7 +6,8 @@
 
 // Parser state structure that holds the token array and the current token
 // index.
-typedef struct {
+typedef struct
+{
   TokenArray tokens; // Array of tokens produced by the lexer.
   int current;       // Current index in the token array.
 } Parser;
@@ -71,6 +72,9 @@ ASTNode *parse_break_stmt(Parser *parser);
 
 // Parses a continue statement: "continue" ";".
 ASTNode *parse_continue_stmt(Parser *parser);
+
+// Parses a return statement: "return" [ expression ] ";".
+ASTNode *parse_return_stmt(Parser *parser);
 
 // Parses a block: "{" { statement } "}".
 ASTNode *parse_block(Parser *parser);

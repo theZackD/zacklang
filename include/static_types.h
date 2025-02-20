@@ -14,9 +14,32 @@ typedef enum
     TYPE_CHAR,
     TYPE_STRING,
     TYPE_VOID,
+    TYPE_ARRAY,  // New: array type
+    TYPE_STRUCT, // New: struct type
     TYPE_UNKNOWN,
     TYPE_ERROR
 } BasicTypeKind;
+
+// Structure to represent a struct field
+typedef struct StructField
+{
+    char *name;
+    struct Type *type;
+} StructField;
+
+// Structure to represent array type info
+typedef struct ArrayTypeInfo
+{
+    struct Type *element_type;
+} ArrayTypeInfo;
+
+// Structure to represent a struct type
+typedef struct StructType
+{
+    char *name;
+    StructField *fields;
+    int field_count;
+} StructType;
 
 // Type structure that can be extended for more complex types later
 typedef struct Type
@@ -24,7 +47,11 @@ typedef struct Type
     BasicTypeKind kind;
     bool is_const;    // Whether the type is immutable (const)
     bool is_comptime; // Whether the value must be known at compile time
-    // Add more fields here for complex types (arrays, structs, etc.)
+    union
+    {
+        StructType *struct_info;   // For TYPE_STRUCT
+        ArrayTypeInfo *array_info; // For TYPE_ARRAY
+    } info;
 } Type;
 
 // Create a new type instance
@@ -87,5 +114,14 @@ bool is_float_type(const Type *type);
 
 // Check if a value would fit in the target numeric type
 bool value_fits_in_type(const char *value, const Type *type);
+
+// Create a new struct type
+Type *create_struct_type(const char *name, StructField *fields, int field_count);
+
+// Look up a field in a struct type
+StructField *lookup_struct_field(const Type *struct_type, const char *field_name);
+
+// Create a struct field
+StructField create_struct_field(const char *name, Type *type);
 
 #endif // STATIC_TYPES_H

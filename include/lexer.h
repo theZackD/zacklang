@@ -2,7 +2,8 @@
 #define LEXER_H
 
 // Define different token types
-typedef enum {
+typedef enum
+{
   TOKEN_IDENTIFIER, // Variable names
   TOKEN_KEYWORD,    // Keywords
   TOKEN_INTEGER,    // Numbers
@@ -22,13 +23,15 @@ typedef enum {
 } TokenType;
 
 // Token structure
-typedef struct {
+typedef struct
+{
   TokenType type;
   char *value;
 } Token;
 
 // Token Array structure
-typedef struct {
+typedef struct
+{
   Token *tokens;
   int count;
   int capacity;
@@ -41,4 +44,3 @@ TokenArray tokenize(const char *code);
 void print_tokens(const TokenArray *array);
 
 #endif // LEXER_H
-

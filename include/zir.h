@@ -137,6 +137,14 @@ struct ZIRBlock
     int instr_count;
     int capacity;
     ZIRBlock *next; // For linear order
+
+    // Control flow information
+    ZIRBlock **predecessors; // Blocks that can branch to this block
+    int pred_count;
+    int pred_capacity;
+    ZIRBlock **successors; // Blocks this block can branch to
+    int succ_count;
+    int succ_capacity;
 };
 
 // A function in ZIR
@@ -187,6 +195,12 @@ ZIRValue *create_zir_return(ZIRValue *value);
 
 // Block manipulation
 void zir_block_add_instr(ZIRBlock *block, ZIRValue *instr);
+void zir_block_add_predecessor(ZIRBlock *block, ZIRBlock *pred);
+void zir_block_add_successor(ZIRBlock *block, ZIRBlock *succ);
+void zir_block_remove_predecessor(ZIRBlock *block, ZIRBlock *pred);
+void zir_block_remove_successor(ZIRBlock *block, ZIRBlock *succ);
+bool zir_block_has_predecessor(ZIRBlock *block, ZIRBlock *pred);
+bool zir_block_has_successor(ZIRBlock *block, ZIRBlock *succ);
 
 // Function manipulation
 void zir_function_add_block(ZIRFunction *func, ZIRBlock *block);

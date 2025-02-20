@@ -100,6 +100,8 @@ ASTNode *parse_statement(Parser *parser)
       return parse_break_stmt(parser);
     else if (strcmp(token->value, "continue") == 0)
       return parse_continue_stmt(parser);
+    else if (strcmp(token->value, "return") == 0)
+      return parse_return_stmt(parser);
     else
       error(parser, "Unexpected keyword in statement");
   }
@@ -108,6 +110,27 @@ ASTNode *parse_statement(Parser *parser)
     return parse_block(parser);
   }
   return parse_expression_stmt(parser);
+}
+
+// Parse a return statement: "return" [ expression ] ";"
+ASTNode *parse_return_stmt(Parser *parser)
+{
+  if (peek(parser)->type != TOKEN_KEYWORD ||
+      strcmp(peek(parser)->value, "return") != 0)
+    error(parser, "Expected 'return' keyword");
+  advance(parser); // consume "return"
+
+  // Optional expression
+  ASTNode *expr = NULL;
+  if (peek(parser)->type != TOKEN_SEMICOLON)
+  {
+    expr = parse_expression(parser);
+  }
+
+  if (!match(parser, TOKEN_SEMICOLON))
+    error(parser, "Expected ';' after return statement");
+
+  return create_return_stmt(expr);
 }
 
 // --- Print Statement ---

@@ -37,12 +37,16 @@ ASTNode *create_prompt_stmt(ASTNode *expr)
 
 // Create an if statement node.
 ASTNode *create_if_stmt(ASTNode *condition, ASTNode *if_block,
+                        ASTNode **elif_conds, ASTNode **elif_blocks, int elif_count,
                         ASTNode *else_block)
 {
   ASTNode *node = malloc(sizeof(ASTNode));
   node->type = AST_IF_STMT;
   node->data.if_stmt.condition = condition;
   node->data.if_stmt.if_block = if_block;
+  node->data.if_stmt.elif_conds = elif_conds;
+  node->data.if_stmt.elif_blocks = elif_blocks;
+  node->data.if_stmt.elif_count = elif_count;
   node->data.if_stmt.else_block = else_block;
   return node;
 }
@@ -74,7 +78,7 @@ ASTNode *create_for_stmt(char *iterator, ASTNode *start_expr, ASTNode *end_expr,
 
 // Create a function definition node.
 ASTNode *create_func_def(char *name, ASTNode **parameters, int param_count,
-                         char *return_type, ASTNode *body)
+                         char *return_type, ASTNode *body, int is_comptime)
 {
   ASTNode *node = malloc(sizeof(ASTNode));
   node->type = AST_FUNC_DEF;
@@ -83,6 +87,7 @@ ASTNode *create_func_def(char *name, ASTNode **parameters, int param_count,
   node->data.func_def.param_count = param_count;
   node->data.func_def.return_type = return_type ? strdup(return_type) : NULL;
   node->data.func_def.body = body;
+  node->data.func_def.is_comptime = is_comptime;
   return node;
 }
 
@@ -182,6 +187,115 @@ ASTNode *create_return_stmt(ASTNode *expr)
   return node;
 }
 
+// Create an array literal node
+ASTNode *create_array_literal(ASTNode **elements, int element_count)
+{
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_ARRAY_LITERAL;
+  node->data.array_literal.elements = elements;
+  node->data.array_literal.element_count = element_count;
+  node->data.array_literal.element_type = NULL; // Initialize to NULL, will be set later
+  return node;
+}
+
+// Create an array indexing node
+ASTNode *create_array_index(ASTNode *array, ASTNode *index)
+{
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_ARRAY_INDEX;
+  node->data.array_index.array = array;
+  node->data.array_index.index = index;
+  return node;
+}
+
+// Create a break statement node
+ASTNode *create_break_stmt(void)
+{
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_BREAK_STMT;
+  return node;
+}
+
+// Create a continue statement node
+ASTNode *create_continue_stmt(void)
+{
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_CONTINUE_STMT;
+  return node;
+}
+
+// Create a switch statement node
+ASTNode *create_switch_stmt(ASTNode *expr, ASTNode **cases, int case_count, ASTNode *finally_block)
+{
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_SWITCH_STMT;
+  node->data.switch_stmt.expr = expr;
+  node->data.switch_stmt.cases = cases;
+  node->data.switch_stmt.case_count = case_count;
+  node->data.switch_stmt.finally_block = finally_block;
+  return node;
+}
+
+// Create a case statement node
+ASTNode *create_case_stmt(ASTNode *expr, ASTNode *statement)
+{
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_CASE_STMT;
+  node->data.case_stmt.expr = expr;
+  node->data.case_stmt.statement = statement;
+  return node;
+}
+
+// Create an f-string node
+ASTNode *create_fstring(ASTNode **parts, int part_count)
+{
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_FSTRING;
+  node->data.fstring.parts = parts;
+  node->data.fstring.part_count = part_count;
+  return node;
+}
+
+// Create a string interpolation node
+ASTNode *create_string_interp(ASTNode *expr)
+{
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_STRING_INTERP;
+  node->data.string_interp.expr = expr;
+  return node;
+}
+
+// Create a struct definition node
+ASTNode *create_struct_def(char *name, char **field_names, char **field_types, int field_count)
+{
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_STRUCT_DEF;
+  node->data.struct_def.name = strdup(name);
+
+  // Allocate and copy field names
+  node->data.struct_def.field_names = malloc(field_count * sizeof(char *));
+  node->data.struct_def.field_types = malloc(field_count * sizeof(char *));
+  node->data.struct_def.field_count = field_count;
+
+  for (int i = 0; i < field_count; i++)
+  {
+    node->data.struct_def.field_names[i] = strdup(field_names[i]);
+    node->data.struct_def.field_types[i] = strdup(field_types[i]);
+  }
+
+  return node;
+}
+
+// Create a field access node
+ASTNode *create_field_access(ASTNode *struct_expr, char *field_name)
+{
+  ASTNode *node = malloc(sizeof(ASTNode));
+  node->type = AST_FIELD_ACCESS;
+  node->data.field_access.struct_expr = struct_expr;
+  node->data.field_access.field_name = strdup(field_name);
+  return node;
+}
+
 // Recursively free an AST node and all its children.
 void free_ast(ASTNode *node)
 {
@@ -209,6 +323,16 @@ void free_ast(ASTNode *node)
   case AST_IF_STMT:
     free_ast(node->data.if_stmt.condition);
     free_ast(node->data.if_stmt.if_block);
+    if (node->data.if_stmt.elif_count > 0)
+    {
+      for (int i = 0; i < node->data.if_stmt.elif_count; i++)
+      {
+        free_ast(node->data.if_stmt.elif_conds[i]);
+        free_ast(node->data.if_stmt.elif_blocks[i]);
+      }
+      free(node->data.if_stmt.elif_conds);
+      free(node->data.if_stmt.elif_blocks);
+    }
     if (node->data.if_stmt.else_block != NULL)
     {
       free_ast(node->data.if_stmt.else_block);
@@ -239,7 +363,7 @@ void free_ast(ASTNode *node)
     break;
   case AST_EXPR_STMT:
     free_ast(node->data.expr_stmt.expr);
-    break; // Missing break; added here.
+    break;
   case AST_BLOCK:
     for (int i = 0; i < node->data.block.stmt_count; i++)
     {
@@ -261,7 +385,7 @@ void free_ast(ASTNode *node)
     break;
   case AST_IDENTIFIER:
     free(node->data.identifier.name);
-    break; // Missing break; added here.
+    break;
   case AST_FUNC_CALL:
     free(node->data.func_call.name);
     for (int i = 0; i < node->data.func_call.arg_count; i++)
@@ -279,6 +403,61 @@ void free_ast(ASTNode *node)
     {
       free_ast(node->data.return_stmt.expr);
     }
+    break;
+  case AST_ARRAY_LITERAL:
+    for (int i = 0; i < node->data.array_literal.element_count; i++)
+    {
+      free_ast(node->data.array_literal.elements[i]);
+    }
+    free(node->data.array_literal.elements);
+    if (node->data.array_literal.element_type)
+    {
+      free_type(node->data.array_literal.element_type);
+    }
+    break;
+  case AST_ARRAY_INDEX:
+    free_ast(node->data.array_index.array);
+    free_ast(node->data.array_index.index);
+    break;
+  case AST_SWITCH_STMT:
+    free_ast(node->data.switch_stmt.expr);
+    for (int i = 0; i < node->data.switch_stmt.case_count; i++)
+    {
+      free_ast(node->data.switch_stmt.cases[i]);
+    }
+    free(node->data.switch_stmt.cases);
+    if (node->data.switch_stmt.finally_block)
+    {
+      free_ast(node->data.switch_stmt.finally_block);
+    }
+    break;
+  case AST_CASE_STMT:
+    free_ast(node->data.case_stmt.expr);
+    free_ast(node->data.case_stmt.statement);
+    break;
+  case AST_FSTRING:
+    for (int i = 0; i < node->data.fstring.part_count; i++)
+    {
+      free_ast(node->data.fstring.parts[i]);
+    }
+    free(node->data.fstring.parts);
+    break;
+  case AST_STRING_INTERP:
+    free_ast(node->data.string_interp.expr);
+    break;
+  case AST_STRUCT_DEF:
+    free(node->data.struct_def.name);
+    for (int i = 0; i < node->data.struct_def.field_count; i++)
+    {
+      free(node->data.struct_def.field_names[i]);
+      free(node->data.struct_def.field_types[i]);
+    }
+    free(node->data.struct_def.field_names);
+    free(node->data.struct_def.field_types);
+    break;
+  case AST_FIELD_ACCESS:
+    free_ast(node->data.field_access.struct_expr);
+    free(node->data.field_access.field_name);
     break;
   default:
     break;

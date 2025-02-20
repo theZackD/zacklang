@@ -70,7 +70,7 @@ const char *type_to_string(const Type *type)
     if (!type)
         return "unknown";
 
-    static char buffer[64];
+    static char buffer[256];
     const char *base_type;
 
     switch (type->kind)
@@ -99,6 +99,10 @@ const char *type_to_string(const Type *type)
     case TYPE_VOID:
         base_type = "void";
         break;
+    case TYPE_STRUCT:
+        snprintf(buffer, sizeof(buffer), "struct %s",
+                 type->info.struct_info->name);
+        return buffer;
     case TYPE_UNKNOWN:
         return "unknown";
     case TYPE_ERROR:
@@ -157,7 +161,7 @@ Type *get_binary_op_type(const char *op, const Type *left, const Type *right)
     // Arithmetic operators
     if (strcmp(op, "+") == 0 || strcmp(op, "-") == 0 ||
         strcmp(op, "*") == 0 || strcmp(op, "/") == 0 ||
-        strcmp(op, "%") == 0)
+        strcmp(op, "%") == 0 || strcmp(op, "**") == 0)
     {
         // String concatenation
         if (strcmp(op, "+") == 0 && (left->kind == TYPE_STRING || right->kind == TYPE_STRING))
@@ -167,10 +171,32 @@ Type *get_binary_op_type(const char *op, const Type *left, const Type *right)
             return result;
         }
 
-        // Numeric operations require exact type match
-        if (left->kind == right->kind && is_numeric_type(left))
+        // Numeric operations
+        if (is_numeric_type(left) && is_numeric_type(right))
         {
-            Type *result = create_type(left->kind);
+            // If either operand is f64, result is f64
+            if (left->kind == TYPE_F64 || right->kind == TYPE_F64)
+            {
+                Type *result = create_type(TYPE_F64);
+                result->is_comptime = is_comptime;
+                return result;
+            }
+            // If either operand is f32, result is f32
+            if (left->kind == TYPE_F32 || right->kind == TYPE_F32)
+            {
+                Type *result = create_type(TYPE_F32);
+                result->is_comptime = is_comptime;
+                return result;
+            }
+            // If either operand is i64, result is i64
+            if (left->kind == TYPE_I64 || right->kind == TYPE_I64)
+            {
+                Type *result = create_type(TYPE_I64);
+                result->is_comptime = is_comptime;
+                return result;
+            }
+            // Otherwise result is i32
+            Type *result = create_type(TYPE_I32);
             result->is_comptime = is_comptime;
             return result;
         }
@@ -182,6 +208,13 @@ Type *get_binary_op_type(const char *op, const Type *left, const Type *right)
         strcmp(op, "<=") == 0 || strcmp(op, ">=") == 0)
     {
         if (left->kind == right->kind)
+        {
+            Type *result = create_type(TYPE_BOOL);
+            result->is_comptime = is_comptime;
+            return result;
+        }
+        // Allow comparison between different numeric types
+        if (is_numeric_type(left) && is_numeric_type(right))
         {
             Type *result = create_type(TYPE_BOOL);
             result->is_comptime = is_comptime;
@@ -256,6 +289,21 @@ bool type_is_condition_compatible(const Type *type)
 // Free a type instance
 void free_type(Type *type)
 {
+    if (!type)
+        return;
+
+    if (type->kind == TYPE_STRUCT)
+    {
+        for (int i = 0; i < type->info.struct_info->field_count; i++)
+        {
+            free(type->info.struct_info->fields[i].name);
+            free_type(type->info.struct_info->fields[i].type);
+        }
+        free(type->info.struct_info->fields);
+        free(type->info.struct_info->name);
+        free(type->info.struct_info);
+    }
+
     free(type);
 }
 
@@ -522,4 +570,73 @@ bool value_fits_in_type(const char *value, const Type *type)
     }
 
     return false;
+}
+
+// Create a new struct type
+Type *create_struct_type(const char *name, StructField *fields, int field_count)
+{
+    Type *type = malloc(sizeof(Type));
+    if (!type)
+    {
+        fprintf(stderr, "Failed to allocate memory for struct type\n");
+        exit(1);
+    }
+
+    type->kind = TYPE_STRUCT;
+    type->is_const = false;
+    type->is_comptime = false;
+
+    type->info.struct_info = malloc(sizeof(StructType));
+    if (!type->info.struct_info)
+    {
+        free(type);
+        fprintf(stderr, "Failed to allocate memory for struct info\n");
+        exit(1);
+    }
+
+    type->info.struct_info->name = strdup(name);
+    type->info.struct_info->field_count = field_count;
+
+    // Allocate and copy fields
+    type->info.struct_info->fields = malloc(field_count * sizeof(StructField));
+    if (!type->info.struct_info->fields)
+    {
+        free(type->info.struct_info->name);
+        free(type->info.struct_info);
+        free(type);
+        fprintf(stderr, "Failed to allocate memory for struct fields\n");
+        exit(1);
+    }
+
+    memcpy(type->info.struct_info->fields, fields, field_count * sizeof(StructField));
+
+    return type;
+}
+
+// Look up a field in a struct type
+StructField *lookup_struct_field(const Type *struct_type, const char *field_name)
+{
+    if (struct_type->kind != TYPE_STRUCT)
+    {
+        return NULL;
+    }
+
+    for (int i = 0; i < struct_type->info.struct_info->field_count; i++)
+    {
+        if (strcmp(struct_type->info.struct_info->fields[i].name, field_name) == 0)
+        {
+            return &struct_type->info.struct_info->fields[i];
+        }
+    }
+
+    return NULL;
+}
+
+// Create a struct field
+StructField create_struct_field(const char *name, Type *type)
+{
+    StructField field;
+    field.name = strdup(name);
+    field.type = type;
+    return field;
 }

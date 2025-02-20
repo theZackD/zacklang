@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define INITIAL_CACHE_SIZE 64
+
 // Helper function for memory allocation
 static void *safe_malloc(size_t size)
 {
@@ -29,6 +31,12 @@ static char *safe_strdup(const char *str)
     return dup;
 }
 
+// Hash function for ZIR values
+static unsigned int hash_value(ZIRValue *value)
+{
+    return (unsigned int)((uintptr_t)value >> 3); // Shift to ignore alignment bits
+}
+
 // Create translation context
 TranslationContext *create_translation_context(void)
 {
@@ -38,12 +46,38 @@ TranslationContext *create_translation_context(void)
     ctx->current_block = NULL;
     ctx->next_reg = 0;
     ctx->next_stack_offset = 0; // Initialize stack offset
+
+    // Initialize value cache
+    ctx->cache_size = INITIAL_CACHE_SIZE;
+    ctx->value_cache = calloc(ctx->cache_size, sizeof(ValueCacheEntry *));
+    if (!ctx->value_cache)
+    {
+        fprintf(stderr, "Failed to allocate value cache\n");
+        exit(1);
+    }
+
     return ctx;
 }
 
 // Free translation context
 void free_translation_context(TranslationContext *ctx)
 {
+    if (!ctx)
+        return;
+
+    // Free value cache
+    for (int i = 0; i < ctx->cache_size; i++)
+    {
+        ValueCacheEntry *entry = ctx->value_cache[i];
+        while (entry)
+        {
+            ValueCacheEntry *next = entry->next;
+            free(entry);
+            entry = next;
+        }
+    }
+    free(ctx->value_cache);
+
     // Note: Don't free mir_module here as it's the return value
     free(ctx);
 }
@@ -318,44 +352,128 @@ MIROperand translate_call(TranslationContext *ctx, ZIRValue *value)
     }
 }
 
+// Cache a translated value
+void cache_value(TranslationContext *ctx, ZIRValue *zir_value, MIROperand mir_operand)
+{
+    if (!ctx || !zir_value)
+        return;
+
+    unsigned int hash = hash_value(zir_value) % ctx->cache_size;
+
+    // Create new cache entry
+    ValueCacheEntry *entry = safe_malloc(sizeof(ValueCacheEntry));
+    entry->zir_value = zir_value;
+    entry->mir_operand = mir_operand;
+
+    // Add to front of chain
+    entry->next = ctx->value_cache[hash];
+    ctx->value_cache[hash] = entry;
+}
+
+// Look up a cached value
+MIROperand *lookup_cached_value(TranslationContext *ctx, ZIRValue *zir_value)
+{
+    if (!ctx || !zir_value)
+        return NULL;
+
+    unsigned int hash = hash_value(zir_value) % ctx->cache_size;
+
+    // Search chain
+    ValueCacheEntry *entry = ctx->value_cache[hash];
+    while (entry)
+    {
+        if (entry->zir_value == zir_value)
+        {
+            return &entry->mir_operand;
+        }
+        entry = entry->next;
+    }
+
+    return NULL;
+}
+
 // Main value translation function
 MIROperand translate_value(TranslationContext *ctx, ZIRValue *value)
 {
+    if (!value)
+        return (MIROperand){0};
+
+    printf("Translating ZIR value of kind: %d\n", value->kind);
+
+    // Check cache first
+    MIROperand *cached = lookup_cached_value(ctx, value);
+    if (cached)
+    {
+        printf("  Found in cache\n");
+        return *cached;
+    }
+
+    MIROperand result;
     switch (value->kind)
     {
     case ZIR_CONST:
-        return translate_constant(ctx, value);
+        printf("  Translating constant\n");
+        result = translate_constant(ctx, value);
+        break;
     case ZIR_LOCAL:
-        return translate_local(ctx, value);
-    case ZIR_BINARY:
-        return translate_binary(ctx, value);
+        printf("  Translating local\n");
+        result = translate_local(ctx, value);
+        break;
     case ZIR_LOAD:
-        return translate_load(ctx, value);
-    case ZIR_ALLOCA:
-        return translate_alloca(ctx, value);
+        printf("  Translating load\n");
+        result = translate_load(ctx, value);
+        break;
+    case ZIR_BINARY:
+        printf("  Translating binary op: %s\n", value->data.binary.op);
+        result = translate_binary(ctx, value);
+        break;
     case ZIR_CALL:
-        return translate_call(ctx, value);
-    case ZIR_BRANCH:
-        translate_branch(ctx, value);
-        return (MIROperand){0}; // Branches don't produce values
-    case ZIR_JUMP:
-        translate_jump(ctx, value);
-        return (MIROperand){0}; // Jumps don't produce values
-    case ZIR_RETURN:
-        translate_return(ctx, value);
-        return (MIROperand){0}; // Returns don't produce values
+        printf("  Translating call\n");
+        result = translate_call(ctx, value);
+        break;
     case ZIR_STORE:
+        printf("  Translating store\n");
         translate_store(ctx, value);
-        return (MIROperand){0}; // Stores don't produce values
+        return (MIROperand){0};
+    case ZIR_BRANCH:
+        printf("  Translating branch\n");
+        translate_branch(ctx, value);
+        return (MIROperand){0};
+    case ZIR_JUMP:
+        printf("  Translating jump\n");
+        translate_jump(ctx, value);
+        return (MIROperand){0};
+    case ZIR_RETURN:
+        printf("  Translating return\n");
+        translate_return(ctx, value);
+        return (MIROperand){0};
+    case ZIR_ALLOCA:
+        printf("  Translating alloca\n");
+        result = translate_alloca(ctx, value);
+        break;
     default:
         fprintf(stderr, "Unsupported ZIR value kind: %d\n", value->kind);
         exit(1);
     }
+
+    // Cache the result if it produces a value
+    if (value->kind != ZIR_STORE && value->kind != ZIR_BRANCH &&
+        value->kind != ZIR_JUMP && value->kind != ZIR_RETURN)
+    {
+        cache_value(ctx, value, result);
+    }
+
+    return result;
 }
 
 // Translate a block
-void translate_block(TranslationContext *ctx, ZIRBlock *block)
+void translate_mir_block(TranslationContext *ctx, ZIRBlock *block)
 {
+    if (!block)
+        return;
+
+    printf("Translating block: %s\n", block->label);
+
     // Create new MIR block
     MIRBlock *mir_block = create_mir_block(block->label);
     ctx->current_block = mir_block;
@@ -363,6 +481,7 @@ void translate_block(TranslationContext *ctx, ZIRBlock *block)
     // Translate each instruction
     for (int i = 0; i < block->instr_count; i++)
     {
+        printf("Translating instruction %d of %d\n", i + 1, block->instr_count);
         translate_value(ctx, block->instructions[i]);
     }
 
@@ -373,6 +492,11 @@ void translate_block(TranslationContext *ctx, ZIRBlock *block)
 // Translate a function
 void translate_function(TranslationContext *ctx, ZIRFunction *func)
 {
+    if (!func)
+        return;
+
+    printf("Translating function: %s\n", func->name);
+
     // Create MIR function
     MIRFunction *mir_func = create_mir_function(func->name, func->return_type);
     ctx->current_func = mir_func;
@@ -381,12 +505,17 @@ void translate_function(TranslationContext *ctx, ZIRFunction *func)
     // Add parameters
     for (int i = 0; i < func->param_count; i++)
     {
+        printf("Adding parameter %d: %s\n", i + 1, func->params[i].name);
         mir_function_add_param(mir_func, func->params[i].name,
                                func->params[i].type);
     }
 
-    // Translate entry block
-    translate_block(ctx, func->entry_block);
+    // Translate each block
+    for (int i = 0; i < func->block_count; i++)
+    {
+        printf("Translating block %d of %d\n", i + 1, func->block_count);
+        translate_mir_block(ctx, func->blocks[i]);
+    }
 
     // Set register count and add to module
     mir_func->reg_count = ctx->next_reg;
@@ -396,11 +525,16 @@ void translate_function(TranslationContext *ctx, ZIRFunction *func)
 // Main translation function
 MIRModule *translate_zir_to_mir(ZIRModule *zir_module)
 {
+    if (!zir_module)
+        return NULL;
+
+    printf("Starting ZIR to MIR translation\n");
     TranslationContext *ctx = create_translation_context();
 
     // Translate each function
     for (int i = 0; i < zir_module->func_count; i++)
     {
+        printf("Translating function %d of %d\n", i + 1, zir_module->func_count);
         translate_function(ctx, zir_module->functions[i]);
     }
 

@@ -5,6 +5,14 @@
 #include "zir.h"
 #include <stdbool.h>
 
+// Value cache entry
+typedef struct ValueCacheEntry
+{
+    ZIRValue *zir_value;
+    MIROperand mir_operand;
+    struct ValueCacheEntry *next;
+} ValueCacheEntry;
+
 // Translation context to maintain state during translation
 typedef struct
 {
@@ -15,6 +23,10 @@ typedef struct
 
     // Memory management
     int next_stack_offset; // Next available stack offset for locals
+
+    // Value cache
+    ValueCacheEntry **value_cache; // Hash table for caching translated values
+    int cache_size;                // Size of the cache hash table
 } TranslationContext;
 
 // Context management
@@ -24,7 +36,7 @@ void free_translation_context(TranslationContext *ctx);
 // Core translation functions
 MIRModule *translate_zir_to_mir(ZIRModule *zir_module);
 void translate_function(TranslationContext *ctx, ZIRFunction *func);
-void translate_block(TranslationContext *ctx, ZIRBlock *block);
+void translate_mir_block(TranslationContext *ctx, ZIRBlock *block);
 MIROperand translate_value(TranslationContext *ctx, ZIRValue *value);
 
 // Value translation helpers
@@ -48,5 +60,9 @@ int get_next_reg(TranslationContext *ctx);
 int allocate_stack_slot(TranslationContext *ctx, Type *type);
 MIROpcode convert_binary_op(const char *zir_op);
 char *gen_unique_label(TranslationContext *ctx, const char *prefix);
+
+// Value cache functions
+void cache_value(TranslationContext *ctx, ZIRValue *zir_value, MIROperand mir_operand);
+MIROperand *lookup_cached_value(TranslationContext *ctx, ZIRValue *zir_value);
 
 #endif // ZIR_TO_MIR_H

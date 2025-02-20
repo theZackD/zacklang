@@ -1,100 +1,116 @@
-(* A program is a sequence of statements *)
-program         ::= { statement }
+(_ A program is a sequence of statements _)
+program ::= { statement }
 
-(* General statement rule *)
-statement       ::= var_decl
-                  | print_stmt
-                  | prompt_stmt
-                  | if_stmt
-                  | switch_stmt
-                  | func_def
-                  | while_stmt
-                  | for_stmt
-                  | break_stmt
-                  | continue_stmt
-                  | expression_stmt
-                  | block
+(_ General statement rule _)
+statement ::= var_decl
+| print_stmt
+| prompt_stmt
+| if_stmt
+| switch_stmt
+| func_def
+| while_stmt
+| for_stmt
+| break_stmt
+| continue_stmt
+| return_stmt
+| expression_stmt
+| block
 
-(* Blocks are sequences of statements enclosed in braces *)
-block           ::= "{" { statement } "}"
+(_ Blocks are sequences of statements enclosed in braces _)
+block ::= "{" { statement } "}"
 
-(* Variable declarations *)
-var_decl        ::= "let" [ "const" ] IDENTIFIER [ ":" type ] "=" expression ";"
+(_ Variable declarations _)
+var_decl ::= "let" [ "const" ] IDENTIFIER [ ":" type ] "=" expression ";"
 
-(* Print statement *)
-print_stmt      ::= "print" "(" expression ")" ";"
+(_ Print statement _)
+print_stmt ::= "print" "(" expression ")" ";"
 
-(* Prompt statement *)
-prompt_stmt     ::= "prompt" "(" expression ")" ";"
+(_ Prompt statement _)
+prompt_stmt ::= "prompt" "(" expression ")" ";"
 
-(* If-elif-else statement *)
-if_stmt         ::= "if" "(" expression ")" block { "elif" "(" expression ")" block } [ "else" block ]
+(_ If-elif-else statement _)
+if_stmt ::= "if" "(" expression ")" block { "elif" "(" expression ")" block } [ "else" block ]
 
-(* Switch statement with cases and optional finally *)
-switch_stmt     ::= "switch" "(" expression ")" "{" { case_stmt } [ finally_stmt ] "}"
-case_stmt       ::= "case" expression ":" statement
-finally_stmt    ::= "finally" ":" statement
+(_ Switch statement with cases and optional finally _)
+switch_stmt ::= "switch" "(" expression ")" "{" { case_stmt } [ finally_stmt ] "}"
+case_stmt ::= "case" expression ":" statement
+finally_stmt ::= "finally" ":" statement
 
-(* Function definition with optional comptime modifier *)
-func_def        ::= [ "comptime" ] "fn" IDENTIFIER "(" [ parameter_list ] ")" [ ":" type ] block
-parameter_list  ::= parameter { "," parameter }
-parameter       ::= IDENTIFIER [ ":" type ]
+(_ Function definition with optional comptime modifier _)
+func_def ::= [ "comptime" ] "fn" IDENTIFIER "(" [ parameter_list ] ")" [ ":" type ] block
+parameter_list ::= parameter { "," parameter }
+parameter ::= IDENTIFIER [ ":" type ]
 
-(* While loop *)
-while_stmt      ::= "while" "(" expression ")" block
+(_ While loop _)
+while_stmt ::= "while" "(" expression ")" block
 
-(* For loop over a range *)
-for_stmt        ::= "for" "(" IDENTIFIER "in" "{" expression ":" expression "}" ")" block
+(_ For loop over a range _)
+for_stmt ::= "for" "(" IDENTIFIER "in" "{" expression ":" expression "}" ")" block
 
-(* Loop control *)
-break_stmt      ::= "break" ";"
-continue_stmt   ::= "continue" ";"
+(_ Loop control _)
+break_stmt ::= "break" ";"
+continue_stmt ::= "continue" ";"
 
-(* Expression statement (for expressions used as statements) *)
+(_ Return statement _)
+return_stmt ::= "return" [ expression ] ";"
+
+(_ Expression statement (for expressions used as statements) _)
 expression_stmt ::= expression ";"
 
-(* Expression grammar *)
+(_ Expression grammar _)
 
-(* Assignment (right-associative) *)
-expression      ::= assignment_expr
+(_ Assignment (right-associative) _)
+expression ::= assignment_expr
 assignment_expr ::= logical_or_expr [ "=" assignment_expr ]
 
-(* Logical OR *)
+(_ Logical OR _)
 logical_or_expr ::= logical_and_expr { "or" logical_and_expr }
 
-(* Logical AND *)
+(_ Logical AND _)
 logical_and_expr::= equality_expr { "and" equality_expr }
 
-(* Equality operators *)
-equality_expr   ::= relational_expr { ( "==" | "!=" ) relational_expr }
+(_ Equality operators _)
+equality_expr ::= relational_expr { ( "==" | "!=" ) relational_expr }
 
-(* Relational operators *)
+(_ Relational operators _)
 relational_expr ::= additive_expr { ( "<" | ">" | "<=" | ">=" ) additive_expr }
 
-(* Additive operators *)
-additive_expr   ::= multiplicative_expr { ( "+" | "-" ) multiplicative_expr }
+(_ Additive operators _)
+additive_expr ::= multiplicative_expr { ( "+" | "-" ) multiplicative_expr }
 
-(* Multiplicative operators *)
-multiplicative_expr ::= unary_expr { ( "*" | "/" | "%" ) unary_expr }
+(_ Multiplicative operators _)
+multiplicative_expr ::= power_expr { ( "\*" | "/" | "%" ) power_expr }
 
-(* Unary operators *)
-unary_expr      ::= [ ( "-" | "+" | "not" ) ] primary_expr
+(_ Power operator (right-associative) _)
+power_expr ::= unary_expr { "\*\*" power_expr }
 
-(* Primary expressions include identifiers, literals, grouped expressions, or function calls *)
-primary_expr    ::= IDENTIFIER
-                  | NUMBER
-                  | STRING
-                  | "(" expression ")"
-                  | function_call
+(_ Unary operators _)
+unary_expr ::= [ ( "-" | "+" | "not" ) ] primary_expr
 
-function_call   ::= IDENTIFIER "(" [ argument_list ] ")"
-argument_list   ::= expression { "," expression }
+(_ Primary expressions include identifiers, literals, grouped expressions, or function calls _)
+primary_expr ::= IDENTIFIER
+| NUMBER
+| string_literal
+| "(" expression ")"
+| function_call
 
-(* Type annotations: these are the primitive type keywords from the lexer *)
-type            ::= "i32" | "i64" | "f32" | "f64" | "bool" | "char" | "string" | "void"
+function_call ::= IDENTIFIER "(" [ argument_list ] ")"
+argument_list ::= expression { "," expression }
 
-(* Terminals:
-     IDENTIFIER, NUMBER, STRING are tokens produced by the lexer.
-     STRING may support interpolation (e.g., f"number is {x}") if prefixed with 'f'.
-*)
+(_ Type annotations: these are the primitive type keywords from the lexer _)
+type ::= base_type | array_type
+base_type ::= "i32" | "i64" | "f32" | "f64" | "bool" | "string" | "void"
+array_type ::= base_type "[" "]"
 
+(_ String literals with f-string interpolation _)
+string_literal ::= STRING | fstring
+fstring ::= "f" '"' { fstring_char | interpolation } '"'
+fstring_char ::= any character except '"' or '{'
+interpolation ::= "{" expression "}"
+STRING ::= '"' { string_char } '"'
+string_char ::= any character except '"'
+
+(_ Terminals:
+IDENTIFIER: sequence of letters, digits, and underscores, starting with a letter or underscore
+NUMBER: sequence of digits with optional decimal point and exponent
+_)
