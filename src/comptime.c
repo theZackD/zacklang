@@ -395,6 +395,70 @@ ComptimeValue *evaluate_comptime_unary_op(const char *op, ComptimeValue *operand
     return NULL;
 }
 
+// Evaluate a function body at compile time
+static ComptimeValue *evaluate_comptime_function_body(ASTNode *body, ASTNode **args, int arg_count, SymbolTable *symbols)
+{
+    if (!body || body->type != AST_BLOCK)
+    {
+        printf("DEBUG: Invalid function body\n");
+        return NULL;
+    }
+
+    // For now, we only support single-statement function bodies that are return statements
+    if (body->data.block.stmt_count != 1)
+    {
+        printf("DEBUG: Only single-statement function bodies supported for now\n");
+        return NULL;
+    }
+
+    // Create a new symbol table for the function's scope
+    SymbolTable *function_scope = create_symbol_table(symbols);
+
+    // Add arguments to the function's symbol table
+    ASTNode *func_def = lookup_symbol(symbols, "current_function")->node;
+    if (func_def && func_def->type == AST_FUNC_DEF)
+    {
+        if (arg_count != func_def->data.func_def.param_count)
+        {
+            printf("DEBUG: Argument count mismatch\n");
+            destroy_symbol_table(function_scope);
+            return NULL;
+        }
+
+        // Add each argument to the symbol table
+        for (int i = 0; i < arg_count; i++)
+        {
+            ASTNode *param = func_def->data.func_def.parameters[i];
+            if (param->type != AST_VAR_DECL)
+            {
+                printf("DEBUG: Invalid parameter node type\n");
+                destroy_symbol_table(function_scope);
+                return NULL;
+            }
+
+            // Create a const variable declaration for the argument
+            ASTNode *arg_decl = create_var_decl(1, param->data.var_decl.identifier,
+                                                param->data.var_decl.type_annotation,
+                                                args[i]);
+            add_symbol_with_node(function_scope, param->data.var_decl.identifier,
+                                 param->data.var_decl.type_annotation, arg_decl);
+        }
+    }
+
+    ASTNode *stmt = body->data.block.statements[0];
+    if (stmt->type != AST_RETURN_STMT)
+    {
+        printf("DEBUG: Only return statements supported for now\n");
+        destroy_symbol_table(function_scope);
+        return NULL;
+    }
+
+    // Evaluate the return expression in the function's scope
+    ComptimeValue *result = evaluate_comptime_expr_with_symbols(stmt->data.return_stmt.expr, function_scope);
+    destroy_symbol_table(function_scope);
+    return result;
+}
+
 // Main evaluation function with symbol table
 ComptimeValue *evaluate_comptime_expr_with_symbols(ASTNode *expr, SymbolTable *symbols)
 {
@@ -506,6 +570,62 @@ ComptimeValue *evaluate_comptime_expr_with_symbols(ASTNode *expr, SymbolTable *s
         }
 
         free_comptime_value(operand);
+        return result;
+    }
+
+    case AST_FUNC_CALL:
+    {
+        printf("DEBUG: Evaluating function call to '%s'\n", expr->data.func_call.name);
+
+        // Look up the function
+        Symbol *sym = lookup_symbol(symbols, expr->data.func_call.name);
+        if (!sym || !sym->node || sym->node->type != AST_FUNC_DEF)
+        {
+            printf("DEBUG: Function '%s' not found\n", expr->data.func_call.name);
+            return NULL;
+        }
+
+        // Check if it's a comptime function
+        if (!sym->node->data.func_def.is_comptime)
+        {
+            printf("DEBUG: Function '%s' is not marked as comptime\n", expr->data.func_call.name);
+            return NULL;
+        }
+
+        // Evaluate arguments
+        ASTNode **evaluated_args = malloc(expr->data.func_call.arg_count * sizeof(ASTNode *));
+        for (int i = 0; i < expr->data.func_call.arg_count; i++)
+        {
+            ComptimeValue *arg_value = evaluate_comptime_expr_with_symbols(expr->data.func_call.arguments[i], symbols);
+            if (!arg_value)
+            {
+                printf("DEBUG: Failed to evaluate argument %d\n", i);
+                free(evaluated_args);
+                return NULL;
+            }
+            // Convert the comptime value back to a literal node
+            char *str_value = comptime_value_to_string(arg_value);
+            evaluated_args[i] = create_literal(str_value);
+            free(str_value);
+            free_comptime_value(arg_value);
+        }
+
+        // Store the current function in the symbol table
+        add_symbol_with_node(symbols, "current_function", sym->type, sym->node);
+
+        // Evaluate the function body with arguments
+        ComptimeValue *result = evaluate_comptime_function_body(sym->node->data.func_def.body,
+                                                                evaluated_args,
+                                                                expr->data.func_call.arg_count,
+                                                                symbols);
+
+        // Clean up
+        for (int i = 0; i < expr->data.func_call.arg_count; i++)
+        {
+            free_ast(evaluated_args[i]);
+        }
+        free(evaluated_args);
+
         return result;
     }
 
