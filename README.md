@@ -100,12 +100,8 @@ The compiler is implemented with the following components:
 
 ## Building and Running
 
-(Add build instructions and dependencies here when ready)
+(In progress)
 
 ## Contributing
 
 This is a work in progress. Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-(Add license information here)
