@@ -236,7 +236,7 @@ ASTNode *create_expr_stmt(ASTNode *expr);
 ASTNode *create_block(ASTNode **statements, int stmt_count);
 ASTNode *create_binary_expr(char *op, ASTNode *left, ASTNode *right);
 ASTNode *create_unary_expr(char *op, ASTNode *operand);
-ASTNode *create_literal(char *value);
+ASTNode *create_literal(const char *value);
 ASTNode *create_identifier(char *name);
 ASTNode *create_func_call(char *name, ASTNode **arguments, int arg_count);
 ASTNode *create_assign_expr(ASTNode *left, ASTNode *right);

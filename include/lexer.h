@@ -19,6 +19,7 @@ typedef enum
   TOKEN_RBRACKET,   // ]
   TOKEN_SEMICOLON,  // ;
   TOKEN_COLON,      // :
+  TOKEN_COMMA,      // ,
   TOKEN_EOF         // End of file.
 } TokenType;
 
@@ -27,6 +28,8 @@ typedef struct
 {
   TokenType type;
   char *value;
+  int line;   // Line number where token appears (1-based)
+  int column; // Column number where token starts (1-based)
 } Token;
 
 // Token Array structure.
@@ -39,7 +42,7 @@ typedef struct
 
 // Function prototypes.
 TokenArray create_token_array();
-void add_token(TokenArray *array, TokenType type, const char *value);
+void add_token(TokenArray *array, TokenType type, const char *value, int line, int column);
 void free_token_array(TokenArray *array);
 TokenArray tokenize(const char *code);
 void print_tokens(const TokenArray *array);

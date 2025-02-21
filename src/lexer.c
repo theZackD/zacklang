@@ -5,13 +5,15 @@
 #include <string.h>
 
 // Defining ZackLang keywords:
-const char *KEYWORDS[] = {"let", "const", "print", "prompt", "if",
-                          "else", "elif", "case", "switch", "finally",
-                          "true", "false", "fn", "return", "break",
-                          "continue", "while", "for", "and", "or",
-                          "not", "xor", "in", "struct", // Primitive types:
-                          "i32", "i64", "f32", "f64", "bool",
-                          "char", "string", "void", "comptime"};
+const char *KEYWORDS[] = {
+    "let", "const", "print", "prompt", "if",
+    "else", "elif", "case", "switch", "finally",
+    "true", "false", "fn", "return", "break",
+    "continue", "while", "for", "and", "or",
+    "not", "xor", "in", "struct", "comptime",
+    // Primitive types:
+    "i32", "i64", "f32", "f64", "bool",
+    "char", "string", "void"};
 #define NUM_KEYWORDS (sizeof(KEYWORDS) / sizeof(KEYWORDS[0]))
 
 // Defining multi-character operators:
@@ -34,13 +36,16 @@ static void report_error(int line, int col, const char *message)
 // Check if a string is a keyword (including primitive types)
 int is_keyword(const char *str)
 {
+  printf("DEBUG: Checking if '%s' is a keyword\n", str);
   for (size_t i = 0; i < NUM_KEYWORDS; i++)
   {
     if (strcmp(str, KEYWORDS[i]) == 0)
     {
+      printf("DEBUG: Found keyword match: %s\n", str);
       return 1; // It's a keyword
     }
   }
+  printf("DEBUG: Not a keyword: %s\n", str);
   return 0; // Not a keyword
 }
 
@@ -87,7 +92,7 @@ TokenArray create_token_array()
 }
 
 // Add a token to the tokenArray
-void add_token(TokenArray *array, TokenType type, const char *value)
+void add_token(TokenArray *array, TokenType type, const char *value, int line, int column)
 {
   if (array->count >= array->capacity)
   {
@@ -101,6 +106,8 @@ void add_token(TokenArray *array, TokenType type, const char *value)
   }
   array->tokens[array->count].type = type;
   array->tokens[array->count].value = strdup(value);
+  array->tokens[array->count].line = line;
+  array->tokens[array->count].column = column;
   array->count++;
 }
 
@@ -124,6 +131,7 @@ TokenArray tokenize(const char *code)
   size_t i = 0;
   int line = 1;
   int col = 1;
+  int start_col = 1; // Track starting column of current token
 
   while (code[i] != '\0')
   {
@@ -144,11 +152,14 @@ TokenArray tokenize(const char *code)
     if (code[i] == '\0')
       break;
 
+    start_col = col; // Remember where this token starts
+
     // f-string literal: check for f" prefix.
     if (code[i] == 'f' && code[i + 1] == '"')
     {
-      i += 2;
-      col += 2; // Skip f"
+      i += 2; // Skip f"
+      col += 2;
+      start_col = col; // Start column is after f"
       size_t start = i;
       while (code[i] != '"' && code[i] != '\0')
       {
@@ -168,12 +179,12 @@ TokenArray tokenize(const char *code)
           if (i > start)
           {
             char *str_part = strndup(&code[start], i - start);
-            add_token(&array, TOKEN_FSTRING, str_part);
+            add_token(&array, TOKEN_FSTRING, str_part, line, start_col);
             free(str_part);
           }
 
-          i++;
-          col++; // Skip '{'
+          size_t orig_pos = i; // Remember the original position in the source
+          i++;                 // Skip '{'
           size_t expr_start = i;
           int brace_count = 1;
 
@@ -204,23 +215,31 @@ TokenArray tokenize(const char *code)
 
           // Back up one position so that we extract the expression correctly.
           i--;
-          col--;
           size_t expr_len = i - expr_start;
           char *expr = strndup(&code[expr_start], expr_len);
 
           // Tokenize the expression.
           TokenArray expr_tokens = tokenize(expr);
           // Add all tokens except the EOF token.
+          // Calculate base column: start_col (after f") + length of string before { - 1
+          int base_col = start_col + (orig_pos - start) - 1; // -1 to align with the opening '{'
           for (int j = 0; j < expr_tokens.count - 1; j++)
           {
-            add_token(&array, expr_tokens.tokens[j].type, expr_tokens.tokens[j].value);
+            // Calculate the original column position for each token
+            int token_col = base_col + (j * 2); // Each token is separated by a space
+            // If we're on a new line, adjust the column position
+            if (line > 1)
+            {
+              token_col = 8; // Reset to the start of the line plus indentation
+            }
+            add_token(&array, expr_tokens.tokens[j].type, expr_tokens.tokens[j].value, line, token_col);
           }
           free_token_array(&expr_tokens);
           free(expr);
 
-          i++;
-          col++; // Move past the closing '}'
+          i++; // Move past the closing '}'
           start = i;
+          start_col = col; // Update start_col for next string part
           continue;
         }
 
@@ -237,14 +256,16 @@ TokenArray tokenize(const char *code)
       if (i > start)
       {
         char *str_part = strndup(&code[start], i - start);
-        add_token(&array, TOKEN_FSTRING, str_part);
+        add_token(&array, TOKEN_FSTRING, str_part, line, start_col);
         free(str_part);
       }
 
       if (code[i] == '"')
       {
         i++;
-        col++; // Skip closing quote.
+        // Calculate column position after the f-string
+        // It should be: start_col + length of string + length of interpolation + 1 (for closing quote)
+        col = start_col + (i - start) - 2; // -2 to account for f" prefix
       }
       else
       {
@@ -283,7 +304,7 @@ TokenArray tokenize(const char *code)
         break;
       }
       char *string_val = strndup(&code[start], i - start);
-      add_token(&array, TOKEN_STRING, string_val);
+      add_token(&array, TOKEN_STRING, string_val, line, start_col);
       free(string_val);
       i++;
       col++; // Skip the closing quote.
@@ -301,7 +322,7 @@ TokenArray tokenize(const char *code)
       }
       char *value = strndup(&code[start], i - start);
       TokenType type = is_keyword(value) ? TOKEN_KEYWORD : TOKEN_IDENTIFIER;
-      add_token(&array, type, value);
+      add_token(&array, type, value, line, start_col);
       free(value);
       continue;
     }
@@ -330,7 +351,7 @@ TokenArray tokenize(const char *code)
         col++;
       }
       char *num = strndup(&code[start], i - start);
-      add_token(&array, has_dot ? TOKEN_FLOAT : TOKEN_INTEGER, num);
+      add_token(&array, has_dot ? TOKEN_FLOAT : TOKEN_INTEGER, num, line, start_col);
       free(num);
       continue;
     }
@@ -342,7 +363,27 @@ TokenArray tokenize(const char *code)
       size_t opLen = strlen(MULTI_CHAR_OPERATORS[op]);
       if (strncmp(&code[i], MULTI_CHAR_OPERATORS[op], opLen) == 0)
       {
-        add_token(&array, TOKEN_OPERATOR, MULTI_CHAR_OPERATORS[op]);
+        // Check for comment
+        if (strcmp(MULTI_CHAR_OPERATORS[op], "//") == 0)
+        {
+          // Skip until end of line or end of file
+          while (code[i] != '\0' && code[i] != '\n')
+          {
+            i++;
+            col++;
+          }
+          // If we found a newline, process it
+          if (code[i] == '\n')
+          {
+            line++;
+            col = 1;
+            i++;
+          }
+          matched = 1;
+          break;
+        }
+
+        add_token(&array, TOKEN_OPERATOR, MULTI_CHAR_OPERATORS[op], line, start_col);
         // Update column (and line if any newline appears in the operator).
         for (size_t k = 0; k < opLen; k++)
         {
@@ -369,34 +410,37 @@ TokenArray tokenize(const char *code)
     switch (current)
     {
     case '(':
-      add_token(&array, TOKEN_LPAREN, "(");
+      add_token(&array, TOKEN_LPAREN, "(", line, col);
       break;
     case ')':
-      add_token(&array, TOKEN_RPAREN, ")");
+      add_token(&array, TOKEN_RPAREN, ")", line, col);
       break;
     case '{':
-      add_token(&array, TOKEN_LBRACE, "{");
+      add_token(&array, TOKEN_LBRACE, "{", line, col);
       break;
     case '}':
-      add_token(&array, TOKEN_RBRACE, "}");
+      add_token(&array, TOKEN_RBRACE, "}", line, col);
       break;
     case '[':
-      add_token(&array, TOKEN_LBRACKET, "[");
+      add_token(&array, TOKEN_LBRACKET, "[", line, col);
       break;
     case ']':
-      add_token(&array, TOKEN_RBRACKET, "]");
+      add_token(&array, TOKEN_RBRACKET, "]", line, col);
       break;
     case ';':
-      add_token(&array, TOKEN_SEMICOLON, ";");
+      add_token(&array, TOKEN_SEMICOLON, ";", line, col);
       break;
     case ':':
-      add_token(&array, TOKEN_COLON, ":");
+      add_token(&array, TOKEN_COLON, ":", line, col);
+      break;
+    case ',':
+      add_token(&array, TOKEN_COMMA, ",", line, col);
       break;
     default:
       if (is_single_char_operator(current))
       {
         char op_single[2] = {current, '\0'};
-        add_token(&array, TOKEN_OPERATOR, op_single);
+        add_token(&array, TOKEN_OPERATOR, op_single, line, col);
       }
       else
       {
@@ -410,7 +454,7 @@ TokenArray tokenize(const char *code)
     col++;
   }
 
-  add_token(&array, TOKEN_EOF, "EOF"); // Append end-of-file token.
+  add_token(&array, TOKEN_EOF, "EOF", line, col); // Append end-of-file token.
   return array;
 }
 
@@ -449,6 +493,8 @@ const char *token_type_to_string(TokenType type)
     return "Semicolon";
   case TOKEN_COLON:
     return "Colon";
+  case TOKEN_COMMA:
+    return "Comma";
   case TOKEN_EOF:
     return "EOF";
   default:
@@ -459,10 +505,19 @@ const char *token_type_to_string(TokenType type)
 // Print tokens (useful for debugging)
 void print_tokens(const TokenArray *array)
 {
+  const char *type_names[] = {
+      "IDENTIFIER", "KEYWORD", "INTEGER", "FLOAT", "STRING",
+      "FSTRING", "OPERATOR", "LPAREN", "RPAREN", "LBRACE",
+      "RBRACE", "LBRACKET", "RBRACKET", "SEMICOLON", "COLON",
+      "COMMA", "EOF"};
+
   for (int i = 0; i < array->count; i++)
   {
-    printf("Token[%d]: Type = %s, Value = %s\n", i,
-           token_type_to_string(array->tokens[i].type),
+    printf("Token[%d] at line %d, col %d: Type = %s, Value = \"%s\"\n",
+           i,
+           array->tokens[i].line,
+           array->tokens[i].column,
+           type_names[array->tokens[i].type],
            array->tokens[i].value);
   }
 }

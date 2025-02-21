@@ -152,7 +152,7 @@ ASTNode *create_unary_expr(char *op, ASTNode *operand)
 }
 
 // Create a literal node.
-ASTNode *create_literal(char *value)
+ASTNode *create_literal(const char *value)
 {
   ASTNode *node = (ASTNode *)xmalloc(sizeof(ASTNode));
   node->type = AST_LITERAL;
