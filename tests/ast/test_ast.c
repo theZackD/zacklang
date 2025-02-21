@@ -104,7 +104,7 @@ void test_fibonacci_ast(void)
 
     // Create function body
     ASTNode **body_stmts = malloc(2 * sizeof(ASTNode *));
-    body_stmts[0] = create_if_stmt(condition, if_block, NULL);
+    body_stmts[0] = create_if_stmt(condition, if_block, NULL, NULL, 0, NULL);
     body_stmts[1] = return_sum;
     ASTNode *body = create_block(body_stmts, 2);
 

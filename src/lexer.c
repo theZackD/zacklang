@@ -25,6 +25,12 @@ const char SINGLE_CHAR_OPERATORS[] = {'+', '-', '*', '/', '%', '=',
                                       ','};
 #define NUM_SINGLE_OPERATORS (sizeof(SINGLE_CHAR_OPERATORS) / sizeof(SINGLE_CHAR_OPERATORS[0]))
 
+// Error-reporting helper (prints to stderr)
+static void report_error(int line, int col, const char *message)
+{
+  fprintf(stderr, "Lexer Error (line %d, col %d): %s\n", line, col, message);
+}
+
 // Check if a string is a keyword (including primitive types)
 int is_keyword(const char *str)
 {
@@ -72,7 +78,7 @@ TokenArray create_token_array()
   array.tokens = malloc(INITIAL_CAPACITY * sizeof(Token));
   if (!array.tokens)
   {
-    printf("Memory allocation failed for TokenArray\n");
+    fprintf(stderr, "Memory allocation failed for TokenArray\n");
     exit(1);
   }
   array.count = 0;
@@ -89,7 +95,7 @@ void add_token(TokenArray *array, TokenType type, const char *value)
     array->tokens = realloc(array->tokens, array->capacity * sizeof(Token));
     if (!array->tokens)
     {
-      printf("Memory allocation failed for expanding TokenArray\n");
+      fprintf(stderr, "Memory allocation failed for expanding TokenArray\n");
       exit(1);
     }
   }
@@ -101,24 +107,38 @@ void add_token(TokenArray *array, TokenType type, const char *value)
 // Free the memory allocated for the tokenArray
 void free_token_array(TokenArray *array)
 {
-  for (size_t i = 0; i < array->count; i++)
+  for (int i = 0; i < array->count; i++)
   {
     free(array->tokens[i].value);
   }
   free(array->tokens);
 }
 
-// Tokenize the input string
+// Forward declaration for recursive tokenization in f-string interpolation.
+TokenArray tokenize(const char *code);
+
+// Tokenize the input string with robust line/column tracking.
 TokenArray tokenize(const char *code)
 {
   TokenArray array = create_token_array();
   size_t i = 0;
+  int line = 1;
+  int col = 1;
 
   while (code[i] != '\0')
   {
-    // Skip whitespace
+    // Skip whitespace and update position.
     while (isspace(code[i]))
     {
+      if (code[i] == '\n')
+      {
+        line++;
+        col = 1;
+      }
+      else
+      {
+        col++;
+      }
       i++;
     }
     if (code[i] == '\0')
@@ -127,14 +147,24 @@ TokenArray tokenize(const char *code)
     // f-string literal: check for f" prefix.
     if (code[i] == 'f' && code[i + 1] == '"')
     {
-      i += 2; // Skip f"
+      i += 2;
+      col += 2; // Skip f"
       size_t start = i;
-
       while (code[i] != '"' && code[i] != '\0')
       {
+        if (code[i] == '\n')
+        {
+          line++;
+          col = 1;
+        }
+        else
+        {
+          col++;
+        }
+
         if (code[i] == '{')
         {
-          // Add the string part before the interpolation if it exists
+          // Add the string part before the interpolation if it exists.
           if (i > start)
           {
             char *str_part = strndup(&code[start], i - start);
@@ -142,13 +172,23 @@ TokenArray tokenize(const char *code)
             free(str_part);
           }
 
-          i++; // Skip {
+          i++;
+          col++; // Skip '{'
           size_t expr_start = i;
           int brace_count = 1;
 
-          // Find matching }
+          // Find matching '}'.
           while (code[i] != '\0' && brace_count > 0)
           {
+            if (code[i] == '\n')
+            {
+              line++;
+              col = 1;
+            }
+            else
+            {
+              col++;
+            }
             if (code[i] == '{')
               brace_count++;
             if (code[i] == '}')
@@ -158,18 +198,19 @@ TokenArray tokenize(const char *code)
 
           if (brace_count > 0)
           {
-            printf("Lexer Error: Unterminated interpolation in f-string\n");
+            report_error(line, col, "Unterminated interpolation in f-string");
             break;
           }
 
-          i--; // Back up to the closing }
-          // Extract the expression between { and }
+          // Back up one position so that we extract the expression correctly.
+          i--;
+          col--;
           size_t expr_len = i - expr_start;
           char *expr = strndup(&code[expr_start], expr_len);
 
-          // Tokenize the expression
+          // Tokenize the expression.
           TokenArray expr_tokens = tokenize(expr);
-          // Add all tokens except EOF from the expression
+          // Add all tokens except the EOF token.
           for (int j = 0; j < expr_tokens.count - 1; j++)
           {
             add_token(&array, expr_tokens.tokens[j].type, expr_tokens.tokens[j].value);
@@ -177,20 +218,22 @@ TokenArray tokenize(const char *code)
           free_token_array(&expr_tokens);
           free(expr);
 
-          i++; // Move past the closing }
+          i++;
+          col++; // Move past the closing '}'
           start = i;
           continue;
         }
 
-        // Handle escape sequences
+        // Handle escape sequences.
         if (code[i] == '\\' && code[i + 1] != '\0')
         {
           i++;
+          col++;
         }
         i++;
       }
 
-      // Add remaining string part if it exists
+      // Add any remaining string part.
       if (i > start)
       {
         char *str_part = strndup(&code[start], i - start);
@@ -201,47 +244,60 @@ TokenArray tokenize(const char *code)
       if (code[i] == '"')
       {
         i++;
+        col++; // Skip closing quote.
       }
       else
       {
-        printf("Lexer Error: Unterminated f-string\n");
+        report_error(line, col, "Unterminated f-string");
       }
       continue;
     }
 
-    // Regular string literal
+    // Regular string literal.
     if (code[i] == '"')
     {
-      i++; // Skip the opening quote
+      i++;
+      col++; // Skip the opening quote.
       size_t start = i;
       while (code[i] != '"' && code[i] != '\0')
       {
-        // Handle escape sequences
         if (code[i] == '\\' && code[i + 1] != '\0')
         {
           i++;
+          col++;
+        }
+        if (code[i] == '\n')
+        {
+          line++;
+          col = 1;
+        }
+        else
+        {
+          col++;
         }
         i++;
       }
       if (code[i] == '\0')
       {
-        printf("Lexer Error: Unterminated string literal\n");
+        report_error(line, col, "Unterminated string literal");
         break;
       }
       char *string_val = strndup(&code[start], i - start);
       add_token(&array, TOKEN_STRING, string_val);
       free(string_val);
-      i++; // Skip the closing quote
+      i++;
+      col++; // Skip the closing quote.
       continue;
     }
 
-    // Identifiers & Keywords (start with a letter or underscore)
+    // Identifiers & Keywords (start with a letter or underscore).
     if (isalpha(code[i]) || code[i] == '_')
     {
       size_t start = i;
       while (isalnum(code[i]) || code[i] == '_')
       {
         i++;
+        col++;
       }
       char *value = strndup(&code[start], i - start);
       TokenType type = is_keyword(value) ? TOKEN_KEYWORD : TOKEN_IDENTIFIER;
@@ -250,7 +306,7 @@ TokenArray tokenize(const char *code)
       continue;
     }
 
-    // Numbers (Integers, Floats, and Negatives)
+    // Numbers (Integers, Floats, and scientific notation).
     if (isdigit(code[i]) || (code[i] == '.' && isdigit(code[i + 1])))
     {
       size_t start = i;
@@ -259,7 +315,7 @@ TokenArray tokenize(const char *code)
       while (isdigit(code[i]) ||
              (code[i] == '.' && !has_dot) ||
              ((code[i] == 'e' || code[i] == 'E') && !has_e) ||
-             ((code[i] == '+' || code[i] == '-') && (code[i - 1] == 'e' || code[i - 1] == 'E')))
+             ((code[i] == '+' || code[i] == '-') && i > start && (code[i - 1] == 'e' || code[i - 1] == 'E')))
       {
         if (code[i] == '.')
         {
@@ -268,9 +324,10 @@ TokenArray tokenize(const char *code)
         if (code[i] == 'e' || code[i] == 'E')
         {
           has_e = 1;
-          has_dot = 1; // Force float type for scientific notation
+          has_dot = 1; // Force float type for scientific notation.
         }
         i++;
+        col++;
       }
       char *num = strndup(&code[start], i - start);
       add_token(&array, has_dot ? TOKEN_FLOAT : TOKEN_INTEGER, num);
@@ -278,7 +335,7 @@ TokenArray tokenize(const char *code)
       continue;
     }
 
-    // Multi-Character Operators (variable length)
+    // Multi-Character Operators.
     int matched = 0;
     for (size_t op = 0; op < NUM_OPERATORS; op++)
     {
@@ -286,6 +343,19 @@ TokenArray tokenize(const char *code)
       if (strncmp(&code[i], MULTI_CHAR_OPERATORS[op], opLen) == 0)
       {
         add_token(&array, TOKEN_OPERATOR, MULTI_CHAR_OPERATORS[op]);
+        // Update column (and line if any newline appears in the operator).
+        for (size_t k = 0; k < opLen; k++)
+        {
+          if (code[i + k] == '\n')
+          {
+            line++;
+            col = 1;
+          }
+          else
+          {
+            col++;
+          }
+        }
         i += opLen;
         matched = 1;
         break;
@@ -294,8 +364,9 @@ TokenArray tokenize(const char *code)
     if (matched)
       continue;
 
-    // Single-Character Operators and Symbols, including brackets and parentheses
-    switch (code[i])
+    // Single-Character Operators and Symbols.
+    char current = code[i];
+    switch (current)
     {
     case '(':
       add_token(&array, TOKEN_LPAREN, "(");
@@ -322,20 +393,76 @@ TokenArray tokenize(const char *code)
       add_token(&array, TOKEN_COLON, ":");
       break;
     default:
-      if (is_single_char_operator(code[i]))
+      if (is_single_char_operator(current))
       {
-        char op_single[2] = {code[i], '\0'};
+        char op_single[2] = {current, '\0'};
         add_token(&array, TOKEN_OPERATOR, op_single);
       }
       else
       {
-        printf("Lexer Error: Unexpected character '%c'\n", code[i]);
+        char err_msg[64];
+        snprintf(err_msg, sizeof(err_msg), "Unexpected character '%c'", current);
+        report_error(line, col, err_msg);
       }
       break;
     }
-    i++; // Move past the current character
+    i++;
+    col++;
   }
 
-  add_token(&array, TOKEN_EOF, "EOF"); // Append end-of-file token
+  add_token(&array, TOKEN_EOF, "EOF"); // Append end-of-file token.
   return array;
+}
+
+// Helper: Convert TokenType to a human-readable string.
+const char *token_type_to_string(TokenType type)
+{
+  switch (type)
+  {
+  case TOKEN_IDENTIFIER:
+    return "Identifier";
+  case TOKEN_KEYWORD:
+    return "Keyword";
+  case TOKEN_INTEGER:
+    return "Integer";
+  case TOKEN_FLOAT:
+    return "Float";
+  case TOKEN_STRING:
+    return "String";
+  case TOKEN_FSTRING:
+    return "FString";
+  case TOKEN_OPERATOR:
+    return "Operator";
+  case TOKEN_LPAREN:
+    return "LeftParen";
+  case TOKEN_RPAREN:
+    return "RightParen";
+  case TOKEN_LBRACE:
+    return "LeftBrace";
+  case TOKEN_RBRACE:
+    return "RightBrace";
+  case TOKEN_LBRACKET:
+    return "LeftBracket";
+  case TOKEN_RBRACKET:
+    return "RightBracket";
+  case TOKEN_SEMICOLON:
+    return "Semicolon";
+  case TOKEN_COLON:
+    return "Colon";
+  case TOKEN_EOF:
+    return "EOF";
+  default:
+    return "Unknown";
+  }
+}
+
+// Print tokens (useful for debugging)
+void print_tokens(const TokenArray *array)
+{
+  for (int i = 0; i < array->count; i++)
+  {
+    printf("Token[%d]: Type = %s, Value = %s\n", i,
+           token_type_to_string(array->tokens[i].type),
+           array->tokens[i].value);
+  }
 }

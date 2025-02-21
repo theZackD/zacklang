@@ -1,41 +1,41 @@
 #ifndef AST_H
 #define AST_H
 
-// Enumeration for AST node types
+// Enumeration for AST node types.
 typedef enum
 {
-  AST_VAR_DECL,      // Variable declaration
-  AST_PRINT_STMT,    // Print statement
-  AST_PROMPT_STMT,   // Prompt statement
-  AST_IF_STMT,       // If statement (includes else)
-  AST_WHILE_STMT,    // While loop
-  AST_FOR_STMT,      // For loop (range-based)
-  AST_FUNC_DEF,      // Function definition
-  AST_EXPR_STMT,     // Expression used as a statement
-  AST_BLOCK,         // Block of statements
-  AST_BINARY_EXPR,   // Binary expression
-  AST_UNARY_EXPR,    // Unary expression
-  AST_LITERAL,       // Literal (number, string, etc.)
-  AST_IDENTIFIER,    // Identifier
-  AST_FUNC_CALL,     // Function call
-  AST_ASSIGN_EXPR,   // Assignment expression
-  AST_RETURN_STMT,   // Return statement
-  AST_ARRAY_LITERAL, // Array literal [1, 2, 3]
-  AST_ARRAY_INDEX,   // Array indexing expr[idx]
-  AST_BREAK_STMT,    // Break statement
-  AST_CONTINUE_STMT, // Continue statement
-  AST_SWITCH_STMT,   // Switch statement
-  AST_CASE_STMT,     // Case statement
-  AST_FSTRING,       // f-string literal
-  AST_STRING_INTERP, // String interpolation expression
-  AST_STRUCT_DEF,    // Struct definition
-  AST_FIELD_ACCESS   // Field access (struct.field)
+  AST_VAR_DECL,      // Variable declaration.
+  AST_PRINT_STMT,    // Print statement.
+  AST_PROMPT_STMT,   // Prompt statement.
+  AST_IF_STMT,       // If statement (includes else).
+  AST_WHILE_STMT,    // While loop.
+  AST_FOR_STMT,      // For loop (range-based).
+  AST_FUNC_DEF,      // Function definition.
+  AST_EXPR_STMT,     // Expression used as a statement.
+  AST_BLOCK,         // Block of statements.
+  AST_BINARY_EXPR,   // Binary expression.
+  AST_UNARY_EXPR,    // Unary expression.
+  AST_LITERAL,       // Literal (number, string, etc.).
+  AST_IDENTIFIER,    // Identifier.
+  AST_FUNC_CALL,     // Function call.
+  AST_ASSIGN_EXPR,   // Assignment expression.
+  AST_RETURN_STMT,   // Return statement.
+  AST_ARRAY_LITERAL, // Array literal (e.g. [1, 2, 3]).
+  AST_ARRAY_INDEX,   // Array indexing expression.
+  AST_BREAK_STMT,    // Break statement.
+  AST_CONTINUE_STMT, // Continue statement.
+  AST_SWITCH_STMT,   // Switch statement.
+  AST_CASE_STMT,     // Case statement.
+  AST_FSTRING,       // f-string literal.
+  AST_STRING_INTERP, // String interpolation expression.
+  AST_STRUCT_DEF,    // Struct definition.
+  AST_FIELD_ACCESS   // Field access (struct.field).
 } ASTNodeType;
 
-// Forward declaration
+// Forward declaration.
 typedef struct ASTNode ASTNode;
 
-// Definition for an AST node
+// Definition for an AST node.
 struct ASTNode
 {
   ASTNodeType type;
@@ -44,10 +44,10 @@ struct ASTNode
     // Variable declaration: let [const] id [: type] = initializer;
     struct
     {
-      int is_const; // 1 for immutable ("const"), 0 for mutable
+      int is_const;
       char *identifier;
-      char *type_annotation; // Initially stored as a string; later, could be a StaticType*
-      ASTNode *initializer;  // Expression node
+      char *type_annotation; // Initially stored as a string.
+      ASTNode *initializer;  // Expression node.
     } var_decl;
 
     // Print statement: print(expr);
@@ -63,16 +63,14 @@ struct ASTNode
     } prompt_stmt;
 
     // If statement: if (cond) { ... } [elif (cond) { ... }] [else { ... }]
-    // For simplicity, this node includes one condition, an "if" block, and an optional "else" block.
-    // You can later expand it to support multiple elif branches.
     struct
     {
-      ASTNode *condition;    // Main if condition
-      ASTNode *if_block;     // Main if block
-      ASTNode **elif_conds;  // Array of elif conditions
-      ASTNode **elif_blocks; // Array of elif blocks
-      int elif_count;        // Number of elif branches
-      ASTNode *else_block;   // Optional else block (can be NULL)
+      ASTNode *condition;
+      ASTNode *if_block;
+      ASTNode **elif_conds;
+      ASTNode **elif_blocks;
+      int elif_count;
+      ASTNode *else_block;
     } if_stmt;
 
     // While loop: while (cond) { ... }
@@ -95,11 +93,11 @@ struct ASTNode
     struct
     {
       char *name;
-      ASTNode **parameters; // Array of parameter nodes (or identifiers)
+      ASTNode **parameters; // Array of parameter nodes.
       int param_count;
-      char *return_type; // As a string initially
-      ASTNode *body;     // Block node
-      int is_comptime;   // Flag for comptime functions
+      char *return_type;
+      ASTNode *body;   // Block node.
+      int is_comptime; // Flag for compile-time functions.
     } func_def;
 
     // Expression statement: expression;
@@ -111,11 +109,11 @@ struct ASTNode
     // Block: { statement1, statement2, ... }
     struct
     {
-      ASTNode **statements; // Array of statement nodes
+      ASTNode **statements;
       int stmt_count;
     } block;
 
-    // Binary expression: left operator right
+    // Binary expression: left op right.
     struct
     {
       char *op;
@@ -123,7 +121,7 @@ struct ASTNode
       ASTNode *right;
     } binary_expr;
 
-    // Unary expression: operator operand
+    // Unary expression: op operand.
     struct
     {
       char *op;
@@ -136,7 +134,7 @@ struct ASTNode
       char *value;
     } literal;
 
-    // Identifier: variable names, function names, etc.
+    // Identifier: variable and function names.
     struct
     {
       char *name;
@@ -146,85 +144,85 @@ struct ASTNode
     struct
     {
       char *name;
-      ASTNode **arguments; // Array of expression nodes
+      ASTNode **arguments;
       int arg_count;
     } func_call;
 
-    // Assignment expression: left = right
+    // Assignment expression: left = right.
     struct
     {
-      ASTNode *left; // Usually an identifier node
+      ASTNode *left;
       ASTNode *right;
     } assign_expr;
 
-    // Return statement
+    // Return statement.
     struct
     {
-      ASTNode *expr; // NULL for void return
+      ASTNode *expr; // May be NULL.
     } return_stmt;
 
-    // Array literal: [expr1, expr2, ...]
+    // Array literal: [expr1, expr2, ...].
     struct
     {
-      ASTNode **elements; // Array of expression nodes
+      ASTNode **elements;
       int element_count;
     } array_literal;
 
-    // Array indexing: array[index]
+    // Array indexing: array[index].
     struct
     {
-      ASTNode *array; // Expression yielding array
-      ASTNode *index; // Expression for index
+      ASTNode *array;
+      ASTNode *index;
     } array_index;
 
     // Switch statement: switch (expr) { cases... finally... }
     struct
     {
-      ASTNode *expr;          // Expression to switch on
-      ASTNode **cases;        // Array of case statements
-      int case_count;         // Number of case statements
-      ASTNode *finally_block; // Optional finally block (can be NULL)
+      ASTNode *expr;
+      ASTNode **cases;
+      int case_count;
+      ASTNode *finally_block;
     } switch_stmt;
 
-    // Case statement: case expr: statement
+    // Case statement: case expr: statement.
     struct
     {
-      ASTNode *expr;      // Case expression to match against
-      ASTNode *statement; // Statement to execute if case matches
+      ASTNode *expr;
+      ASTNode *statement;
     } case_stmt;
 
-    // F-string: sequence of string literals and interpolated expressions
+    // F-string: sequence of literals and interpolated expressions.
     struct
     {
-      ASTNode **parts; // Array of string literals and interpolated expressions
-      int part_count;  // Number of parts
+      ASTNode **parts;
+      int part_count;
     } fstring;
 
-    // String interpolation: expression to be evaluated and converted to string
+    // String interpolation: expression to be evaluated.
     struct
     {
-      ASTNode *expr; // Expression to interpolate
+      ASTNode *expr;
     } string_interp;
 
-    // Struct definition
+    // Struct definition.
     struct
     {
-      char *name;         // Struct name
-      char **field_names; // Array of field names
-      char **field_types; // Array of field types
-      int field_count;    // Number of fields
+      char *name;
+      char **field_names;
+      char **field_types;
+      int field_count;
     } struct_def;
 
-    // Field access
+    // Field access: struct.field.
     struct
     {
-      ASTNode *struct_expr; // Expression evaluating to a struct
-      char *field_name;     // Name of the field to access
+      ASTNode *struct_expr;
+      char *field_name;
     } field_access;
   } data;
 };
 
-// Function prototypes for creating AST nodes
+// Function prototypes for creating AST nodes.
 ASTNode *create_var_decl(int is_const, char *identifier, char *type_annotation, ASTNode *initializer);
 ASTNode *create_print_stmt(ASTNode *expr);
 ASTNode *create_prompt_stmt(ASTNode *expr);
@@ -247,20 +245,14 @@ ASTNode *create_array_literal(ASTNode **elements, int element_count);
 ASTNode *create_array_index(ASTNode *array, ASTNode *index);
 ASTNode *create_break_stmt(void);
 ASTNode *create_continue_stmt(void);
-
-// Function prototypes for switch and case statements
 ASTNode *create_switch_stmt(ASTNode *expr, ASTNode **cases, int case_count, ASTNode *finally_block);
 ASTNode *create_case_stmt(ASTNode *expr, ASTNode *statement);
-
-// Function prototypes for f-strings
 ASTNode *create_fstring(ASTNode **parts, int part_count);
 ASTNode *create_string_interp(ASTNode *expr);
-
-// Add function prototypes for the new node types
 ASTNode *create_struct_def(char *name, char **field_names, char **field_types, int field_count);
 ASTNode *create_field_access(ASTNode *struct_expr, char *field_name);
 
-// Free an AST node (recursively)
+// Free an AST node (recursively).
 void free_ast(ASTNode *node);
 
 #endif // AST_H

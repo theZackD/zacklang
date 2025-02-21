@@ -227,61 +227,60 @@ void test_basic_function_evaluation(void)
     ASTNode *body = create_block(body_stmts, 1);
     ASTNode *func_def = create_func_def("answer", NULL, 0, "i32", body, 1); // is_comptime = 1
 
-    // Create a function call
-    ASTNode *call = create_func_call("answer", NULL, 0);
-
     // Create symbol table and add function
     SymbolTable *table = create_symbol_table(NULL);
     add_symbol_with_node(table, "answer", "fn(): i32", func_def);
 
-    // Evaluate the function call
+    // Test 1: Basic function call
+    ASTNode *call = create_func_call("answer", NULL, 0);
     ComptimeValue *result = evaluate_comptime_expr_with_symbols(call, table);
     assert(result != NULL);
     assert(result->type->kind == TYPE_I32);
     assert(result->value.i_val == 42);
     printf("✓ Basic comptime function evaluation passed\n");
+    free_comptime_value(result);
+    free_ast(call);
 
-    // Test calling non-existent function
-    ASTNode *bad_call = create_func_call("nonexistent", NULL, 0);
-    result = evaluate_comptime_expr_with_symbols(bad_call, table);
+    // Test 2: Non-existent function
+    call = create_func_call("nonexistent", NULL, 0);
+    result = evaluate_comptime_expr_with_symbols(call, table);
     assert(result == NULL);
     printf("✓ Non-existent function error handling passed\n");
+    free_ast(call);
 
-    // Test calling non-comptime function
+    // Test 3: Non-comptime function
     ASTNode *regular_func = create_func_def("regular", NULL, 0, "i32", body, 0); // is_comptime = 0
     add_symbol_with_node(table, "regular", "fn(): i32", regular_func);
-    ASTNode *regular_call = create_func_call("regular", NULL, 0);
-    result = evaluate_comptime_expr_with_symbols(regular_call, table);
+    call = create_func_call("regular", NULL, 0);
+    result = evaluate_comptime_expr_with_symbols(call, table);
     assert(result == NULL);
     printf("✓ Non-comptime function error handling passed\n");
+    free_ast(call);
+    free_ast(regular_func);
 
-    // Test function with multiple statements (not supported yet)
+    // Test 4: Multi-statement function
     ASTNode **multi_stmts = malloc(2 * sizeof(ASTNode *));
     multi_stmts[0] = create_var_decl(0, "x", "i32", create_literal("1"));
     multi_stmts[1] = create_return_stmt(create_literal("1"));
     ASTNode *multi_body = create_block(multi_stmts, 2);
     ASTNode *multi_func = create_func_def("multi", NULL, 0, "i32", multi_body, 1);
     add_symbol_with_node(table, "multi", "fn(): i32", multi_func);
-    ASTNode *multi_call = create_func_call("multi", NULL, 0);
-    result = evaluate_comptime_expr_with_symbols(multi_call, table);
+    call = create_func_call("multi", NULL, 0);
+    result = evaluate_comptime_expr_with_symbols(call, table);
     assert(result == NULL);
     printf("✓ Multi-statement function error handling passed\n");
-
-    // Cleanup
-    free_comptime_value(result);
-    free_ast(func_def);
-    free_ast(bad_call);
-    free_ast(regular_func);
-    free_ast(regular_call);
+    free_ast(call);
     free_ast(multi_func);
-    free_ast(multi_call);
+
+    // Final cleanup
+    free_ast(func_def);
     destroy_symbol_table(table);
 }
 
 // Test comptime function with parameter
 void test_function_with_parameter(void)
 {
-    // Create a comptime function that adds 1 to its parameter
+    // Create a simple comptime function that adds 1 to its parameter
     // comptime fn inc(x: i32): i32 { return x + 1; }
 
     // Create parameter
@@ -302,14 +301,14 @@ void test_function_with_parameter(void)
     // Create the function definition
     ASTNode *func_def = create_func_def("inc", params, 1, "i32", body, 1); // is_comptime = 1
 
+    // Create symbol table and add function
+    SymbolTable *table = create_symbol_table(NULL);
+    add_symbol_with_node(table, "inc", "fn(i32): i32", func_def);
+
     // Create function call with argument 5
     ASTNode **args = malloc(sizeof(ASTNode *));
     args[0] = create_literal("5");
     ASTNode *call = create_func_call("inc", args, 1);
-
-    // Create symbol table and add function
-    SymbolTable *table = create_symbol_table(NULL);
-    add_symbol_with_node(table, "inc", "fn(i32): i32", func_def);
 
     // Evaluate the function call
     ComptimeValue *result = evaluate_comptime_expr_with_symbols(call, table);
@@ -318,11 +317,12 @@ void test_function_with_parameter(void)
     assert(result->value.i_val == 6);
     printf("✓ Comptime function with parameter passed\n");
 
-    // Cleanup
+    // Cleanup in reverse order
     free_comptime_value(result);
-    free_ast(func_def);
-    free_ast(call);
     destroy_symbol_table(table);
+    free_ast(call);
+    free(args);
+    free_ast(func_def);
 }
 
 int main()

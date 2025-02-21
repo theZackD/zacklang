@@ -4,7 +4,35 @@
 #include <string.h>
 #include <math.h>
 
+// Add at the top with other static variables
+static int current_recursion_depth = 0;
+
+// Memory allocation helpers.
+static void *xmalloc(size_t size)
+{
+    void *ptr = malloc(size);
+    if (!ptr)
+    {
+        fprintf(stderr, "Failed to allocate %zu bytes\n", size);
+        exit(EXIT_FAILURE);
+    }
+    return ptr;
+}
+
+static char *xstrdup(const char *s)
+{
+    char *dup = strdup(s);
+    if (!dup)
+    {
+        fprintf(stderr, "Failed to duplicate string\n");
+        exit(EXIT_FAILURE);
+    }
+    return dup;
+}
+
+//-----------------------------------------------------------
 // Create a new comptime value
+//-----------------------------------------------------------
 ComptimeValue *create_comptime_value(Type *type)
 {
     ComptimeValue *value = malloc(sizeof(ComptimeValue));
@@ -15,7 +43,7 @@ ComptimeValue *create_comptime_value(Type *type)
     }
     value->type = type;
 
-    // Initialize union based on type
+    // Initialize union based on type.
     if (type->kind == TYPE_STRUCT)
     {
         value->value.struct_val.type_name = strdup(type->info.struct_info->name);
@@ -25,14 +53,16 @@ ComptimeValue *create_comptime_value(Type *type)
     }
     else
     {
-        // Initialize to 0/false/NULL
+        // Initialize to 0/false/NULL.
         memset(&value->value, 0, sizeof(value->value));
     }
 
     return value;
 }
 
+//-----------------------------------------------------------
 // Free a comptime value
+//-----------------------------------------------------------
 void free_comptime_value(ComptimeValue *value)
 {
     if (!value)
@@ -55,7 +85,9 @@ void free_comptime_value(ComptimeValue *value)
     free(value);
 }
 
+//-----------------------------------------------------------
 // Convert a comptime value to a string
+//-----------------------------------------------------------
 char *comptime_value_to_string(ComptimeValue *value)
 {
     if (!value)
@@ -86,7 +118,9 @@ char *comptime_value_to_string(ComptimeValue *value)
     return strdup(buffer);
 }
 
+//-----------------------------------------------------------
 // Check if an expression can be evaluated at compile time
+//-----------------------------------------------------------
 bool is_comptime_expr(ASTNode *expr)
 {
     if (!expr)
@@ -98,8 +132,8 @@ bool is_comptime_expr(ASTNode *expr)
         return true;
 
     case AST_IDENTIFIER:
-        // Only const variables can be comptime
-        // TODO: Look up in symbol table and check if const
+        // Only const variables can be comptime.
+        // TODO: Look up in symbol table and check if const.
         return false;
 
     case AST_BINARY_EXPR:
@@ -110,8 +144,8 @@ bool is_comptime_expr(ASTNode *expr)
         return is_comptime_expr(expr->data.unary_expr.operand);
 
     case AST_FUNC_CALL:
-        // Only comptime functions can be evaluated at compile time
-        // TODO: Look up function and check if comptime
+        // Only comptime functions can be evaluated at compile time.
+        // TODO: Look up function and check if comptime.
         return false;
 
     default:
@@ -119,7 +153,9 @@ bool is_comptime_expr(ASTNode *expr)
     }
 }
 
+//-----------------------------------------------------------
 // Convert a literal to a comptime value
+//-----------------------------------------------------------
 ComptimeValue *literal_to_comptime_value(const char *literal_value, Type *type)
 {
     printf("DEBUG: Converting literal '%s' of type %s to comptime value\n",
@@ -153,7 +189,7 @@ ComptimeValue *literal_to_comptime_value(const char *literal_value, Type *type)
 
     case TYPE_STRING:
         printf("DEBUG: Converting to string\n");
-        // Remove quotes and handle escapes
+        // Remove quotes and handle escapes.
         value->value.s_val = strdup(literal_value + 1);
         value->value.s_val[strlen(value->value.s_val) - 1] = '\0';
         break;
@@ -169,7 +205,9 @@ ComptimeValue *literal_to_comptime_value(const char *literal_value, Type *type)
     return value;
 }
 
+//-----------------------------------------------------------
 // Evaluate a binary operation at compile time
+//-----------------------------------------------------------
 ComptimeValue *evaluate_comptime_binary_op(const char *op, ComptimeValue *left, ComptimeValue *right)
 {
     printf("DEBUG: Evaluating binary operation '%s'\n", op);
@@ -183,7 +221,7 @@ ComptimeValue *evaluate_comptime_binary_op(const char *op, ComptimeValue *left, 
     printf("DEBUG: Left operand type: %s\n", type_to_string(left->type));
     printf("DEBUG: Right operand type: %s\n", type_to_string(right->type));
 
-    // Handle logical operators first
+    // Handle logical operators first.
     if (left->type->kind == TYPE_BOOL && right->type->kind == TYPE_BOOL)
     {
         printf("DEBUG: Both operands are boolean\n");
@@ -219,24 +257,20 @@ ComptimeValue *evaluate_comptime_binary_op(const char *op, ComptimeValue *left, 
         return result;
     }
 
-    // Handle numeric operations
+    // Handle numeric operations.
     if (is_numeric_type(left->type) && is_numeric_type(right->type))
     {
         printf("DEBUG: Both operands are numeric\n");
 
-        // For comparison operators, create a boolean result
+        // For comparison operators, create a boolean result.
         if (strcmp(op, "==") == 0 || strcmp(op, "!=") == 0 ||
             strcmp(op, "<") == 0 || strcmp(op, "<=") == 0 ||
             strcmp(op, ">") == 0 || strcmp(op, ">=") == 0)
         {
             ComptimeValue *result = create_comptime_value(create_type(TYPE_BOOL));
-
-            // Convert to highest precision for comparison
             double l_val = left->type->kind >= TYPE_F32 ? left->value.f_val : (double)left->value.i_val;
             double r_val = right->type->kind >= TYPE_F32 ? right->value.f_val : (double)right->value.i_val;
-
             printf("DEBUG: Comparing numeric values: %g %s %g\n", l_val, op, r_val);
-
             if (strcmp(op, "==") == 0)
                 result->value.b_val = l_val == r_val;
             else if (strcmp(op, "!=") == 0)
@@ -249,28 +283,22 @@ ComptimeValue *evaluate_comptime_binary_op(const char *op, ComptimeValue *left, 
                 result->value.b_val = l_val > r_val;
             else if (strcmp(op, ">=") == 0)
                 result->value.b_val = l_val >= r_val;
-
             printf("DEBUG: Comparison result: %s\n", result->value.b_val ? "true" : "false");
             return result;
         }
 
-        // For arithmetic operators, get the result type
+        // For arithmetic operators, get the result type.
         Type *result_type = get_binary_op_type(op, left->type, right->type);
         if (!result_type)
         {
             printf("DEBUG: Failed to get result type for binary operation\n");
             return NULL;
         }
-
         printf("DEBUG: Result type will be: %s\n", type_to_string(result_type));
         ComptimeValue *result = create_comptime_value(result_type);
-
-        // Convert to highest precision
         double l_val = left->type->kind >= TYPE_F32 ? left->value.f_val : (double)left->value.i_val;
         double r_val = right->type->kind >= TYPE_F32 ? right->value.f_val : (double)right->value.i_val;
-
         printf("DEBUG: Converted operands to: %g and %g\n", l_val, r_val);
-
         if (strcmp(op, "+") == 0)
         {
             result->value.f_val = l_val + r_val;
@@ -313,18 +341,16 @@ ComptimeValue *evaluate_comptime_binary_op(const char *op, ComptimeValue *left, 
             result->value.f_val = fmod(l_val, r_val);
             printf("DEBUG: Modulo result: %g\n", result->value.f_val);
         }
-
-        // Convert back to integer if needed
+        // Convert back to integer if needed.
         if (result_type->kind < TYPE_F32)
         {
             result->value.i_val = (int64_t)result->value.f_val;
             printf("DEBUG: Converted float result to integer: %lld\n", result->value.i_val);
         }
-
         return result;
     }
 
-    // Handle string concatenation
+    // Handle string concatenation.
     if (strcmp(op, "+") == 0 && left->type->kind == TYPE_STRING && right->type->kind == TYPE_STRING)
     {
         ComptimeValue *result = create_comptime_value(create_type(TYPE_STRING));
@@ -334,7 +360,7 @@ ComptimeValue *evaluate_comptime_binary_op(const char *op, ComptimeValue *left, 
         return result;
     }
 
-    // Handle string comparison
+    // Handle string comparison.
     if ((strcmp(op, "==") == 0 || strcmp(op, "!=") == 0 ||
          strcmp(op, "<") == 0 || strcmp(op, "<=") == 0 ||
          strcmp(op, ">") == 0 || strcmp(op, ">=") == 0) &&
@@ -342,20 +368,18 @@ ComptimeValue *evaluate_comptime_binary_op(const char *op, ComptimeValue *left, 
     {
         ComptimeValue *result = create_comptime_value(create_type(TYPE_BOOL));
         int cmp = strcmp(left->value.s_val, right->value.s_val);
-
         if (strcmp(op, "==") == 0)
-            result->value.b_val = cmp == 0;
+            result->value.b_val = (cmp == 0);
         else if (strcmp(op, "!=") == 0)
-            result->value.b_val = cmp != 0;
+            result->value.b_val = (cmp != 0);
         else if (strcmp(op, "<") == 0)
-            result->value.b_val = cmp < 0;
+            result->value.b_val = (cmp < 0);
         else if (strcmp(op, "<=") == 0)
-            result->value.b_val = cmp <= 0;
+            result->value.b_val = (cmp <= 0);
         else if (strcmp(op, ">") == 0)
-            result->value.b_val = cmp > 0;
+            result->value.b_val = (cmp > 0);
         else if (strcmp(op, ">=") == 0)
-            result->value.b_val = cmp >= 0;
-
+            result->value.b_val = (cmp >= 0);
         return result;
     }
 
@@ -364,7 +388,9 @@ ComptimeValue *evaluate_comptime_binary_op(const char *op, ComptimeValue *left, 
     return NULL;
 }
 
+//-----------------------------------------------------------
 // Evaluate a unary operation at compile time
+//-----------------------------------------------------------
 ComptimeValue *evaluate_comptime_unary_op(const char *op, ComptimeValue *operand)
 {
     if (!operand)
@@ -374,13 +400,9 @@ ComptimeValue *evaluate_comptime_unary_op(const char *op, ComptimeValue *operand
     {
         ComptimeValue *result = create_comptime_value(operand->type);
         if (operand->type->kind >= TYPE_F32)
-        {
             result->value.f_val = -operand->value.f_val;
-        }
         else
-        {
             result->value.i_val = -operand->value.i_val;
-        }
         return result;
     }
 
@@ -395,71 +417,127 @@ ComptimeValue *evaluate_comptime_unary_op(const char *op, ComptimeValue *operand
     return NULL;
 }
 
-// Evaluate a function body at compile time
-static ComptimeValue *evaluate_comptime_function_body(ASTNode *body, ASTNode **args, int arg_count, SymbolTable *symbols)
+//-----------------------------------------------------------
+// Evaluate a block at compile time
+//-----------------------------------------------------------
+ComptimeValue *evaluate_comptime_block(ASTNode *block, SymbolTable *symbols)
 {
-    if (!body || body->type != AST_BLOCK)
+    if (!block || block->type != AST_BLOCK)
     {
-        printf("DEBUG: Invalid function body\n");
+        printf("DEBUG: Invalid block node\n");
         return NULL;
     }
 
-    // For now, we only support single-statement function bodies that are return statements
-    if (body->data.block.stmt_count != 1)
+    ComptimeValue *result = NULL;
+    for (int i = 0; i < block->data.block.stmt_count; i++)
     {
-        printf("DEBUG: Only single-statement function bodies supported for now\n");
-        return NULL;
-    }
-
-    // Create a new symbol table for the function's scope
-    SymbolTable *function_scope = create_symbol_table(symbols);
-
-    // Add arguments to the function's symbol table
-    ASTNode *func_def = lookup_symbol(symbols, "current_function")->node;
-    if (func_def && func_def->type == AST_FUNC_DEF)
-    {
-        if (arg_count != func_def->data.func_def.param_count)
+        ASTNode *stmt = block->data.block.statements[i];
+        if (stmt->type == AST_RETURN_STMT)
         {
-            printf("DEBUG: Argument count mismatch\n");
-            destroy_symbol_table(function_scope);
-            return NULL;
+            result = evaluate_comptime_expr_with_symbols(stmt->data.return_stmt.expr, symbols);
+            break;
         }
-
-        // Add each argument to the symbol table
-        for (int i = 0; i < arg_count; i++)
+        else if (stmt->type == AST_IF_STMT)
         {
-            ASTNode *param = func_def->data.func_def.parameters[i];
-            if (param->type != AST_VAR_DECL)
+            // Evaluate condition
+            ComptimeValue *cond = evaluate_comptime_expr_with_symbols(stmt->data.if_stmt.condition, symbols);
+            if (!cond || cond->type->kind != TYPE_BOOL)
             {
-                printf("DEBUG: Invalid parameter node type\n");
-                destroy_symbol_table(function_scope);
+                printf("DEBUG: Invalid if condition\n");
+                free_comptime_value(cond);
                 return NULL;
             }
 
-            // Create a const variable declaration for the argument
-            ASTNode *arg_decl = create_var_decl(1, param->data.var_decl.identifier,
-                                                param->data.var_decl.type_annotation,
-                                                args[i]);
-            add_symbol_with_node(function_scope, param->data.var_decl.identifier,
-                                 param->data.var_decl.type_annotation, arg_decl);
+            if (cond->value.b_val)
+            {
+                result = evaluate_comptime_block(stmt->data.if_stmt.if_block, symbols);
+            }
+            else if (stmt->data.if_stmt.else_block)
+            {
+                result = evaluate_comptime_block(stmt->data.if_stmt.else_block, symbols);
+            }
+            free_comptime_value(cond);
+            if (result)
+                break; // Return value found
         }
+        // Add support for other statement types as needed
     }
-
-    ASTNode *stmt = body->data.block.statements[0];
-    if (stmt->type != AST_RETURN_STMT)
-    {
-        printf("DEBUG: Only return statements supported for now\n");
-        destroy_symbol_table(function_scope);
-        return NULL;
-    }
-
-    // Evaluate the return expression in the function's scope
-    ComptimeValue *result = evaluate_comptime_expr_with_symbols(stmt->data.return_stmt.expr, function_scope);
-    destroy_symbol_table(function_scope);
     return result;
 }
 
-// Main evaluation function with symbol table
+//-----------------------------------------------------------
+// Evaluate a function body at compile time.
+// For now, only single-statement function bodies with a return statement are supported.
+// The function definition is passed in directly.
+//-----------------------------------------------------------
+static ComptimeValue *evaluate_comptime_function_body(ASTNode *func_def, ASTNode **args, int arg_count, SymbolTable *symbols)
+{
+    if (!func_def || func_def->type != AST_FUNC_DEF)
+    {
+        printf("DEBUG: Invalid function definition\n");
+        return NULL;
+    }
+
+    // Check recursion depth
+    if (current_recursion_depth >= MAX_RECURSION_DEPTH)
+    {
+        printf("DEBUG: Maximum recursion depth exceeded\n");
+        return NULL;
+    }
+    current_recursion_depth++;
+
+    ASTNode *body = func_def->data.func_def.body;
+    if (!body || body->type != AST_BLOCK)
+    {
+        printf("DEBUG: Invalid function body\n");
+        current_recursion_depth--;
+        return NULL;
+    }
+
+    // Create a new scope for the function
+    SymbolTable *function_scope = create_symbol_table(symbols);
+
+    // Check argument count
+    if (arg_count != func_def->data.func_def.param_count)
+    {
+        printf("DEBUG: Argument count mismatch\n");
+        destroy_symbol_table(function_scope);
+        current_recursion_depth--;
+        return NULL;
+    }
+
+    // Add each parameter to the function's scope
+    for (int i = 0; i < arg_count; i++)
+    {
+        ASTNode *param = func_def->data.func_def.parameters[i];
+        if (param->type != AST_VAR_DECL)
+        {
+            printf("DEBUG: Invalid parameter node type\n");
+            destroy_symbol_table(function_scope);
+            current_recursion_depth--;
+            return NULL;
+        }
+
+        // Create a const variable declaration with the argument as initializer
+        ASTNode *param_decl = create_var_decl(1, param->data.var_decl.identifier,
+                                              param->data.var_decl.type_annotation,
+                                              args[i]);
+        add_symbol_with_node(function_scope, param->data.var_decl.identifier,
+                             param->data.var_decl.type_annotation, param_decl);
+    }
+
+    // Evaluate the function body
+    ComptimeValue *result = evaluate_comptime_block(body, function_scope);
+
+    // Cleanup
+    destroy_symbol_table(function_scope);
+    current_recursion_depth--;
+    return result;
+}
+
+//-----------------------------------------------------------
+// Evaluate an expression at compile time with a symbol table.
+//-----------------------------------------------------------
 ComptimeValue *evaluate_comptime_expr_with_symbols(ASTNode *expr, SymbolTable *symbols)
 {
     if (!expr)
@@ -495,7 +573,7 @@ ComptimeValue *evaluate_comptime_expr_with_symbols(ASTNode *expr, SymbolTable *s
             return NULL;
         }
 
-        // Check if it's a const variable
+        // Check if it's a const variable.
         if (sym->node && sym->node->type == AST_VAR_DECL && sym->node->data.var_decl.is_const)
         {
             printf("DEBUG: Found const variable '%s', evaluating initializer\n", expr->data.identifier.name);
@@ -509,16 +587,12 @@ ComptimeValue *evaluate_comptime_expr_with_symbols(ASTNode *expr, SymbolTable *s
     case AST_BINARY_EXPR:
     {
         printf("DEBUG: Evaluating binary expression with operator '%s'\n", expr->data.binary_expr.op);
-        printf("DEBUG: Evaluating left operand...\n");
         ComptimeValue *left = evaluate_comptime_expr_with_symbols(expr->data.binary_expr.left, symbols);
         if (!left)
         {
             printf("DEBUG: Failed to evaluate left operand\n");
             return NULL;
         }
-        printf("DEBUG: Successfully evaluated left operand\n");
-
-        printf("DEBUG: Evaluating right operand...\n");
         ComptimeValue *right = evaluate_comptime_expr_with_symbols(expr->data.binary_expr.right, symbols);
         if (!right)
         {
@@ -526,22 +600,7 @@ ComptimeValue *evaluate_comptime_expr_with_symbols(ASTNode *expr, SymbolTable *s
             free_comptime_value(left);
             return NULL;
         }
-        printf("DEBUG: Successfully evaluated right operand\n");
-
-        printf("DEBUG: Evaluating binary operation between types %s and %s\n",
-               type_to_string(left->type), type_to_string(right->type));
-
         ComptimeValue *result = evaluate_comptime_binary_op(expr->data.binary_expr.op, left, right);
-        if (!result)
-        {
-            printf("DEBUG: Binary operation evaluation failed\n");
-        }
-        else
-        {
-            printf("DEBUG: Binary operation evaluation succeeded with type %s\n",
-                   type_to_string(result->type));
-        }
-
         free_comptime_value(left);
         free_comptime_value(right);
         return result;
@@ -556,19 +615,7 @@ ComptimeValue *evaluate_comptime_expr_with_symbols(ASTNode *expr, SymbolTable *s
             printf("DEBUG: Failed to evaluate unary operand\n");
             return NULL;
         }
-        printf("DEBUG: Successfully evaluated unary operand\n");
-
         ComptimeValue *result = evaluate_comptime_unary_op(expr->data.unary_expr.op, operand);
-        if (!result)
-        {
-            printf("DEBUG: Unary operation evaluation failed\n");
-        }
-        else
-        {
-            printf("DEBUG: Unary operation evaluation succeeded with type %s\n",
-                   type_to_string(result->type));
-        }
-
         free_comptime_value(operand);
         return result;
     }
@@ -577,7 +624,7 @@ ComptimeValue *evaluate_comptime_expr_with_symbols(ASTNode *expr, SymbolTable *s
     {
         printf("DEBUG: Evaluating function call to '%s'\n", expr->data.func_call.name);
 
-        // Look up the function
+        // Look up the function.
         Symbol *sym = lookup_symbol(symbols, expr->data.func_call.name);
         if (!sym || !sym->node || sym->node->type != AST_FUNC_DEF)
         {
@@ -585,44 +632,63 @@ ComptimeValue *evaluate_comptime_expr_with_symbols(ASTNode *expr, SymbolTable *s
             return NULL;
         }
 
-        // Check if it's a comptime function
+        // Check if it's a comptime function.
         if (!sym->node->data.func_def.is_comptime)
         {
             printf("DEBUG: Function '%s' is not marked as comptime\n", expr->data.func_call.name);
             return NULL;
         }
 
-        // Evaluate arguments
+        // Evaluate each argument
         ASTNode **evaluated_args = malloc(expr->data.func_call.arg_count * sizeof(ASTNode *));
+        if (!evaluated_args)
+        {
+            printf("DEBUG: Failed to allocate memory for evaluated arguments\n");
+            return NULL;
+        }
+
+        // Initialize to NULL so we can clean up properly on error
+        for (int i = 0; i < expr->data.func_call.arg_count; i++)
+        {
+            evaluated_args[i] = NULL;
+        }
+
+        // Evaluate each argument
         for (int i = 0; i < expr->data.func_call.arg_count; i++)
         {
             ComptimeValue *arg_value = evaluate_comptime_expr_with_symbols(expr->data.func_call.arguments[i], symbols);
             if (!arg_value)
             {
                 printf("DEBUG: Failed to evaluate argument %d\n", i);
+                // Clean up any arguments we've already evaluated
+                for (int j = 0; j < i; j++)
+                {
+                    if (evaluated_args[j])
+                    {
+                        free_ast(evaluated_args[j]);
+                    }
+                }
                 free(evaluated_args);
                 return NULL;
             }
-            // Convert the comptime value back to a literal node
+
+            // Convert the argument value to a literal
             char *str_value = comptime_value_to_string(arg_value);
             evaluated_args[i] = create_literal(str_value);
             free(str_value);
             free_comptime_value(arg_value);
         }
 
-        // Store the current function in the symbol table
-        add_symbol_with_node(symbols, "current_function", sym->type, sym->node);
+        // Evaluate the function body
+        ComptimeValue *result = evaluate_comptime_function_body(sym->node, evaluated_args, expr->data.func_call.arg_count, symbols);
 
-        // Evaluate the function body with arguments
-        ComptimeValue *result = evaluate_comptime_function_body(sym->node->data.func_def.body,
-                                                                evaluated_args,
-                                                                expr->data.func_call.arg_count,
-                                                                symbols);
-
-        // Clean up
+        // Clean up the evaluated arguments
         for (int i = 0; i < expr->data.func_call.arg_count; i++)
         {
-            free_ast(evaluated_args[i]);
+            if (evaluated_args[i])
+            {
+                free_ast(evaluated_args[i]);
+            }
         }
         free(evaluated_args);
 
@@ -635,8 +701,13 @@ ComptimeValue *evaluate_comptime_expr_with_symbols(ASTNode *expr, SymbolTable *s
     }
 }
 
-// Original evaluation function now calls the new one with NULL symbols
+//-----------------------------------------------------------
+// Top-level evaluation: create a temporary symbol table if none provided.
+//-----------------------------------------------------------
 ComptimeValue *evaluate_comptime_expr(ASTNode *expr)
 {
-    return evaluate_comptime_expr_with_symbols(expr, NULL);
+    SymbolTable *temp = create_symbol_table(NULL);
+    ComptimeValue *result = evaluate_comptime_expr_with_symbols(expr, temp);
+    destroy_symbol_table(temp);
+    return result;
 }

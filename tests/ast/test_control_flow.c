@@ -108,7 +108,7 @@ void test_break_continue(void)
     ASTNode *if_block = create_block(if_stmts, 1);
 
     // Create if statement
-    ASTNode *if_stmt = create_if_stmt(if_condition, if_block, NULL);
+    ASTNode *if_stmt = create_if_stmt(if_condition, if_block, NULL, NULL, 0, NULL);
 
     // Create increment (i = i + 1)
     ASTNode *i_plus_one = create_binary_expr("+", create_identifier("i"), create_literal("1"));
@@ -141,7 +141,7 @@ void test_break_continue(void)
     ASTNode *for_if_block = create_block(for_if_stmts, 1);
 
     // Create if statement
-    ASTNode *for_if_stmt = create_if_stmt(for_if_condition, for_if_block, NULL);
+    ASTNode *for_if_stmt = create_if_stmt(for_if_condition, for_if_block, NULL, NULL, 0, NULL);
 
     // Create print statement
     ASTNode **print_args = malloc(sizeof(ASTNode *));
