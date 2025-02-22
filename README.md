@@ -1,6 +1,4 @@
-<div align="center">
-  <img src="zacklang_logo.png" alt="Zacklang Logo" width="400" height="400">
-</div>
+![Zacklang Logo](logo.png)
 
 # Zacklang Compiler
 
