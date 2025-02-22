@@ -1,11 +1,4 @@
-███████╗ █████╗ ██████╗██╗ ██╗██╗ █████╗ ███╗ ██╗ ██████╗
-╚══███╔╝██╔══██╗██╔════╝██║ ██╔╝██║ ██╔══██╗████╗ ██║██╔════╝
-███╔╝ ███████║██║ █████╔╝ ██║ ███████║██╔██╗ ██║██║ ███╗
-███╔╝ ██╔══██║██║ ██╔═██╗ ██║ ██╔══██║██║╚██╗██║██║ ██║
-███████╗██║ ██║╚██████╗██║ ██╗███████╗██║ ██║██║ ╚████║╚██████╔╝
-╚══════╝╚═╝ ╚═╝ ╚═════╝╚═╝ ╚═╝╚══════╝╚═╝ ╚═╝╚═╝ ╚═══╝ ╚═════╝
-
-```
+![Zacklang Logo](zacklang_logo.png)
 
 # Zacklang Compiler
 
@@ -18,6 +11,7 @@ Zacklang is a robust compiler infrastructure that implements advanced optimizati
 ## Features
 
 - **Advanced Optimization Pipeline**
+
   - Dead Block Elimination
   - Block Merging (Coming Soon)
   - Jump Threading (Planned)
@@ -25,6 +19,7 @@ Zacklang is a robust compiler infrastructure that implements advanced optimizati
   - Value Numbering (Planned)
 
 - **Robust IR System**
+
   - Type-safe intermediate representation
   - SSA form
   - Comprehensive control flow analysis
@@ -39,15 +34,17 @@ Zacklang is a robust compiler infrastructure that implements advanced optimizati
 Recent benchmarks demonstrate the efficiency of our optimization passes:
 
 ### Dead Block Elimination Performance
+
 ```
 
 Structure Time (μs) Blocks
 Linear 991.39 100,000
 Tree 1005.36 100,000
 
-````
+```
 
 Key findings:
+
 - Processes 100K blocks in ~1ms
 - Approximately 10ns per block
 - Linear and tree structures show comparable performance
@@ -65,7 +62,7 @@ make
 
 # Run tests
 make test
-````
+```
 
 ## Requirements
 
