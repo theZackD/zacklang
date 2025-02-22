@@ -1,6 +1,6 @@
 ![Zacklang Logo](logo.png)
 
-# Zacklang Compiler
+# ZackLang Compiler
 
 A modern, optimizing compiler infrastructure designed for performance and reliability.
 
