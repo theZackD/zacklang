@@ -1,0 +1,37 @@
+# Build artifacts
+*.o
+*.out
+test_*
+!tests/
+*.exe
+
+# LLVM IR files
+*.ll
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Clangd cache
+.cache/
+compile_commands.json
+.clangd
+
+# Debug files
+*.dSYM/
+
+# Generated files
+*.d
+*.a
+*.so
+*.dylib
+
+# Temporary files
+*.tmp
+*~
+
+# Project specific
+function_calls 
