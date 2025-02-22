@@ -54,6 +54,13 @@ test_zir_boolean: tests/zir/test_zir_boolean.cpp $(ZIR_OBJS)
 	./$@
 	rm -f $@
 
+# Add dead block analysis test target
+.PHONY: test_zir_dead_blocks
+test_zir_dead_blocks: tests/zir/test_zir_dead_blocks.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -fsanitize=address $^ -o $@
+	./$@
+	rm -f $@
+
 # Add string test target
 .PHONY: test_zir_string
 test_zir_string: tests/zir/test_zir_string.cpp $(ZIR_OBJS)
@@ -82,5 +89,68 @@ test_zir_function: tests/zir/test_zir_function.cpp $(ZIR_OBJS)
 	./$@
 	rm -f $@
 
+# Add instruction test target
+.PHONY: test_zir_instruction
+test_zir_instruction: tests/zir/test_zir_instruction.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -fsanitize=address $^ -o $@
+	./$@
+	rm -f $@
+
+# Add arithmetic instruction test target
+.PHONY: test_zir_arithmetic
+test_zir_arithmetic: tests/zir/test_zir_arithmetic.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -fsanitize=address $^ -o $@
+	./$@
+	rm -f $@
+
+# Add comparison instruction test target
+.PHONY: test_zir_comparison
+test_zir_comparison: tests/zir/test_zir_comparison.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -fsanitize=address $^ -o $@
+	./$@
+	rm -f $@
+
+# Add logical instruction test target
+.PHONY: test_zir_logical
+test_zir_logical: tests/zir/test_zir_logical.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -fsanitize=address $^ -o $@
+	./$@
+	rm -f $@
+
+# Add absolute value example test target
+.PHONY: test_zir_abs_example
+test_zir_abs_example: tests/zir/examples/test_zir_abs.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -fsanitize=address $^ -o $@
+	./$@
+	rm -f $@
+
+# Add control flow instruction test target
+.PHONY: test_zir_control_flow
+test_zir_control_flow: tests/zir/test_zir_control_flow.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -fsanitize=address $^ -o $@
+	./$@
+	rm -f $@
+
+# Add block links test target
+.PHONY: test_zir_block_links
+test_zir_block_links: tests/zir/test_zir_block_links.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -fsanitize=address $^ -o $@
+	./$@
+	rm -f $@
+
+# Add graph analysis test target
+.PHONY: test_zir_graph_analysis
+test_zir_graph_analysis: tests/zir/test_zir_graph_analysis.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -fsanitize=address $^ -o $@
+	./$@
+	rm -f $@
+
+# Add dead block elimination benchmark target
+.PHONY: test_dead_block_bench
+test_dead_block_bench: tests/zir/benchmarks/test_dead_block_bench.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -O3 $^ -o $@
+	./$@
+	rm -f $@
+
 # Update test target
-test: test_zir_basic test_zir_safety test_zir_memory test_zir_value test_zir_integer test_zir_float test_zir_boolean test_zir_string test_zir_c_api test_zir_basic_block test_zir_function
+test: test_zir_basic test_zir_safety test_zir_memory test_zir_value test_zir_integer test_zir_float test_zir_boolean test_zir_string test_zir_c_api test_zir_basic_block test_zir_function test_zir_instruction test_zir_arithmetic test_zir_comparison test_zir_logical test_zir_abs_example test_zir_control_flow test_zir_block_links test_zir_graph_analysis test_zir_dead_blocks test_dead_block_bench

@@ -34,4 +34,7 @@ compile_commands.json
 *~
 
 # Project specific
-function_calls 
+function_calls
+zlist
+zir_llvm_roadmap.info
+zir_llvm_roadmap 

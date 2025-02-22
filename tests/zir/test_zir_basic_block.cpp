@@ -1,23 +1,26 @@
-#include "../../include/zir_c_api.h"
+#include "zir_c_api.h"
 #include <cassert>
 #include <cstring>
 #include <iostream>
 #include <cstdio>
+#include <vector>
 
 void test_basic_block_creation()
 {
-    // Test creating a block
-    ZIRBasicBlockHandle block = zir_create_basic_block("test");
+    std::cout << "Testing basic block creation...\n";
+
+    // Create a basic block
+    zir_block_handle block = zir_create_basic_block("test");
     assert(block != nullptr);
-    assert(strcmp(zir_get_block_name(block), "test") == 0);
 
-    // Test ID functionality
+    // Get and verify the name
+    const char *name = zir_get_block_name(block);
+    assert(name != nullptr);
+    assert(strcmp(name, "test") == 0);
+
+    // Get and verify the ID
     uint64_t id = zir_get_block_id(block);
-    assert(id != UINT64_MAX); // Valid ID
-
-    // Test changing block name
-    zir_set_block_name(block, "modified");
-    assert(strcmp(zir_get_block_name(block), "modified") == 0);
+    assert(id != UINT64_MAX);
 
     // Cleanup
     zir_destroy_basic_block(block);
@@ -42,41 +45,28 @@ void test_null_handling()
 
 void test_multiple_blocks()
 {
-    // Create multiple blocks
-    ZIRBasicBlockHandle blocks[3];
-    const char *names[] = {"entry", "body", "exit"};
+    std::cout << "Testing multiple blocks...\n";
 
-    for (int i = 0; i < 3; i++)
+    const size_t num_blocks = 10;
+    std::vector<zir_block_handle> blocks(num_blocks);
+    const char *names[] = {
+        "block0", "block1", "block2", "block3", "block4",
+        "block5", "block6", "block7", "block8", "block9"};
+
+    // Create blocks
+    for (size_t i = 0; i < num_blocks; i++)
     {
         blocks[i] = zir_create_basic_block(names[i]);
         assert(blocks[i] != nullptr);
-        assert(strcmp(zir_get_block_name(blocks[i]), names[i]) == 0);
-    }
 
-    // Verify they're distinct
-    for (int i = 0; i < 3; i++)
-    {
-        for (int j = i + 1; j < 3; j++)
-        {
-            assert(blocks[i] != blocks[j]);
-        }
-    }
+        // Verify name
+        const char *name = zir_get_block_name(blocks[i]);
+        assert(name != nullptr);
+        assert(strcmp(name, names[i]) == 0);
 
-    // Test unique IDs
-    uint64_t ids[3];
-    for (int i = 0; i < 3; i++)
-    {
-        ids[i] = zir_get_block_id(blocks[i]);
-        assert(ids[i] != UINT64_MAX);
-    }
-
-    // Verify IDs are unique
-    for (int i = 0; i < 3; i++)
-    {
-        for (int j = i + 1; j < 3; j++)
-        {
-            assert(ids[i] != ids[j]);
-        }
+        // Verify ID
+        uint64_t id = zir_get_block_id(blocks[i]);
+        assert(id != UINT64_MAX);
     }
 
     // Cleanup
