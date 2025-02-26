@@ -12,11 +12,11 @@ Zacklang is a robust compiler infrastructure that implements advanced optimizati
 
 - **Advanced Optimization Pipeline**
 
-  - Dead Block Elimination
-  - Block Merging ✅
-  - Jump Threading (Planned)
-  - Critical Edge Splitting (Planned)
-  - Value Numbering (Planned)
+  - [x] Dead Block Elimination
+  - [x] Block Merging
+  - [ ] Jump Threading (Planned)
+  - [ ] Critical Edge Splitting (Planned)
+  - [ ] Value Numbering (Planned)
 
 - **Robust IR System**
 
@@ -100,14 +100,14 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 ## Optimization Passes
 
-### 1. Dead Block Elimination ✅
+### 1. Dead Block Elimination [x]
 
 - Identifies and removes unreachable blocks
 - Maintains control flow graph integrity
 - Handles complex nested structures
 - Benchmark-proven performance
 
-### 2. Block Merging ✅
+### 2. Block Merging [x]
 
 - Identifies and combines adjacent blocks with safe control flow
 - Performs comprehensive safety checks before merging
