@@ -416,4 +416,110 @@ namespace zir
         }
         return nullptr;
     }
+
+    // Jump Threading Analysis Methods
+
+    bool ZIRBasicBlockImpl::isJumpThreadableBlock() const
+    {
+        // A block is jump threadable if it contains only a single unconditional jump instruction
+        if (instructions.size() != 1)
+            return false;
+
+        auto instr = instructions[0];
+        return instr && instr->getOpcode() == ZIROpcode::BR;
+    }
+
+    bool ZIRBasicBlockImpl::canThreadJumpThrough() const
+    {
+        // A block can be thread-jumped through if:
+        // 1. It has exactly one successor
+        // 2. It has no side effects (for now, just check if it's a jump threadable block)
+        return successors.size() == 1 && isJumpThreadableBlock();
+    }
+
+    std::shared_ptr<ZIRBasicBlockImpl> ZIRBasicBlockImpl::getJumpTarget() const
+    {
+        // If this is a jump threadable block, return its target
+        if (!isJumpThreadableBlock() || successors.empty())
+            return nullptr;
+
+        return *successors.begin();
+    }
+
+    bool ZIRBasicBlockImpl::isJumpThreadingSafe(
+        const std::shared_ptr<ZIRBasicBlockImpl> &from,
+        const std::shared_ptr<ZIRBasicBlockImpl> &to) const
+    {
+        // Check that 'this' is the block we're threading through
+        if (!canThreadJumpThrough())
+            return false;
+
+        // Make sure 'from' is a predecessor of 'this'
+        if (!hasPredecessor(from))
+            return false;
+
+        // Make sure 'to' is the jump target of 'this'
+        if (getJumpTarget() != to)
+            return false;
+
+        // For now, we'll only consider threading safe if there are no PHI nodes in 'to'
+        // as those would need special handling
+        for (const auto &instr : to->instructions)
+        {
+            if (instr->getOpcode() == ZIROpcode::PHI)
+                return false;
+        }
+
+        // Also check that 'from' doesn't have multiple exits
+        // (conditional branches would need special handling)
+        for (const auto &instr : from->instructions)
+        {
+            if (instr->getOpcode() == ZIROpcode::BR_COND)
+                return false;
+        }
+
+        return true;
+    }
+
+    std::vector<std::pair<std::shared_ptr<ZIRBasicBlockImpl>, std::shared_ptr<ZIRBasicBlockImpl>>>
+    ZIRBasicBlockImpl::findJumpThreadingOpportunities() const
+    {
+        std::vector<std::pair<std::shared_ptr<ZIRBasicBlockImpl>, std::shared_ptr<ZIRBasicBlockImpl>>> opportunities;
+
+        // If this block cannot be thread-jumped through, there are no opportunities
+        if (!canThreadJumpThrough())
+            return opportunities;
+
+        auto target = getJumpTarget();
+        if (!target)
+            return opportunities;
+
+        // For each predecessor, check if threading is safe
+        for (const auto &pred : predecessors)
+        {
+            if (isJumpThreadingSafe(pred, target))
+            {
+                opportunities.push_back({pred, target});
+            }
+        }
+
+        return opportunities;
+    }
+
+    // Perform jump threading transformation
+    bool ZIRBasicBlockImpl::performJumpThreading(
+        const std::shared_ptr<ZIRBasicBlockImpl> &from,
+        const std::shared_ptr<ZIRBasicBlockImpl> &to)
+    {
+        // Check if jump threading is safe
+        if (!isJumpThreadingSafe(from, to))
+            return false;
+
+        // TODO: Implement the actual jump threading transformation
+        // 1. Update the terminator instruction in 'from' to directly jump to 'to'
+        // 2. Update the CFG by adding an edge from 'from' to 'to'
+        // 3. Optionally clean up if this block is no longer needed
+
+        return true;
+    }
 }

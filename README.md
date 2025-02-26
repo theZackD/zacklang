@@ -14,7 +14,7 @@ Zacklang is a robust compiler infrastructure that implements advanced optimizati
 
   - [x] Dead Block Elimination
   - [x] Block Merging
-  - [ ] Jump Threading (Planned)
+  - [x] Jump Threading (Analysis Phase Complete)
   - [ ] Critical Edge Splitting (Planned)
   - [ ] Value Numbering (Planned)
 
@@ -116,6 +116,15 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 - Reduces branch overhead in generated code
 - C API support for integration with external tools
 - Thoroughly tested with a variety of control flow patterns
+
+### 3. Jump Threading (Analysis Phase) [x]
+
+- Identifies redundant jumps that can be bypassed
+- Analyzes blocks that only contain jumps to determine if they can be eliminated
+- Validates safety of jump threading transformations
+- Detects opportunities for control flow optimization
+- Prevents unsafe transformations in the presence of PHI nodes
+- Thoroughly tested with various control flow patterns
 
 ## License
 

@@ -182,6 +182,19 @@ namespace zir
         std::shared_ptr<ZIRBasicBlockImpl> mergeWith(const std::shared_ptr<ZIRBasicBlockImpl> &other);
         std::shared_ptr<ZIRBasicBlockImpl> findMergeableSuccessor() const;
 
+        // Jump threading
+        bool isJumpThreadableBlock() const;
+        bool canThreadJumpThrough() const;
+        std::shared_ptr<ZIRBasicBlockImpl> getJumpTarget() const;
+        bool isJumpThreadingSafe(const std::shared_ptr<ZIRBasicBlockImpl> &from,
+                                 const std::shared_ptr<ZIRBasicBlockImpl> &to) const;
+        std::vector<std::pair<std::shared_ptr<ZIRBasicBlockImpl>, std::shared_ptr<ZIRBasicBlockImpl>>>
+        findJumpThreadingOpportunities() const;
+
+        // Perform jump threading transformation
+        bool performJumpThreading(const std::shared_ptr<ZIRBasicBlockImpl> &from,
+                                  const std::shared_ptr<ZIRBasicBlockImpl> &to);
+
         // Reachability analysis
         bool isReachableFrom(const std::shared_ptr<ZIRBasicBlockImpl> &start) const
         {
