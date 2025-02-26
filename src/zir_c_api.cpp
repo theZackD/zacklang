@@ -965,6 +965,235 @@ extern "C"
         return std::find(dead_blocks.begin(), dead_blocks.end(), *block_ptr) != dead_blocks.end();
     }
 
+    // Block linking functions
+    void zir_block_add_predecessor(zir_block_handle block, zir_block_handle pred)
+    {
+        if (!block || !pred)
+        {
+            return;
+        }
+
+        auto *block_ptr = handle_to_block(block);
+        auto *pred_ptr = handle_to_block(pred);
+
+        if (!block_ptr || !pred_ptr || !*block_ptr || !*pred_ptr)
+        {
+            return;
+        }
+
+        (*block_ptr)->addPredecessor(*pred_ptr);
+    }
+
+    void zir_block_add_successor(zir_block_handle block, zir_block_handle succ)
+    {
+        if (!block || !succ)
+        {
+            return;
+        }
+
+        auto *block_ptr = handle_to_block(block);
+        auto *succ_ptr = handle_to_block(succ);
+
+        if (!block_ptr || !succ_ptr || !*block_ptr || !*succ_ptr)
+        {
+            return;
+        }
+
+        (*block_ptr)->addSuccessor(*succ_ptr);
+    }
+
+    void zir_block_remove_predecessor(zir_block_handle block, zir_block_handle pred)
+    {
+        if (!block || !pred)
+        {
+            return;
+        }
+
+        auto *block_ptr = handle_to_block(block);
+        auto *pred_ptr = handle_to_block(pred);
+
+        if (!block_ptr || !pred_ptr || !*block_ptr || !*pred_ptr)
+        {
+            return;
+        }
+
+        (*block_ptr)->removePredecessor(*pred_ptr);
+    }
+
+    void zir_block_remove_successor(zir_block_handle block, zir_block_handle succ)
+    {
+        if (!block || !succ)
+        {
+            return;
+        }
+
+        auto *block_ptr = handle_to_block(block);
+        auto *succ_ptr = handle_to_block(succ);
+
+        if (!block_ptr || !succ_ptr || !*block_ptr || !*succ_ptr)
+        {
+            return;
+        }
+
+        (*block_ptr)->removeSuccessor(*succ_ptr);
+    }
+
+    size_t zir_block_get_predecessor_count(zir_block_handle block)
+    {
+        if (!block)
+        {
+            return 0;
+        }
+
+        auto *block_ptr = handle_to_block(block);
+        if (!block_ptr || !*block_ptr)
+        {
+            return 0;
+        }
+
+        return (*block_ptr)->getPredecessorCount();
+    }
+
+    size_t zir_block_get_successor_count(zir_block_handle block)
+    {
+        if (!block)
+        {
+            return 0;
+        }
+
+        auto *block_ptr = handle_to_block(block);
+        if (!block_ptr || !*block_ptr)
+        {
+            return 0;
+        }
+
+        return (*block_ptr)->getSuccessorCount();
+    }
+
+    bool zir_block_has_predecessor(zir_block_handle block, zir_block_handle pred)
+    {
+        if (!block || !pred)
+        {
+            return false;
+        }
+
+        auto *block_ptr = handle_to_block(block);
+        auto *pred_ptr = handle_to_block(pred);
+
+        if (!block_ptr || !pred_ptr || !*block_ptr || !*pred_ptr)
+        {
+            return false;
+        }
+
+        return (*block_ptr)->hasPredecessor(*pred_ptr);
+    }
+
+    bool zir_block_has_successor(zir_block_handle block, zir_block_handle succ)
+    {
+        if (!block || !succ)
+        {
+            return false;
+        }
+
+        auto *block_ptr = handle_to_block(block);
+        auto *succ_ptr = handle_to_block(succ);
+
+        if (!block_ptr || !succ_ptr || !*block_ptr || !*succ_ptr)
+        {
+            return false;
+        }
+
+        return (*block_ptr)->hasSuccessor(*succ_ptr);
+    }
+
+    // Block merging functions
+    bool zir_block_is_mergeable_with(zir_block_handle block, zir_block_handle other)
+    {
+        if (!block || !other)
+        {
+            return false;
+        }
+
+        auto *block_ptr = handle_to_block(block);
+        auto *other_ptr = handle_to_block(other);
+
+        if (!block_ptr || !other_ptr || !*block_ptr || !*other_ptr)
+        {
+            return false;
+        }
+
+        return (*block_ptr)->isMergeableWith(*other_ptr);
+    }
+
+    bool zir_block_is_safe_merge_with(zir_block_handle block, zir_block_handle other)
+    {
+        if (!block || !other)
+        {
+            return false;
+        }
+
+        auto *block_ptr = handle_to_block(block);
+        auto *other_ptr = handle_to_block(other);
+
+        if (!block_ptr || !other_ptr || !*block_ptr || !*other_ptr)
+        {
+            return false;
+        }
+
+        return (*block_ptr)->isSafeMergeWith(*other_ptr);
+    }
+
+    zir_block_handle zir_block_merge_with(zir_block_handle block, zir_block_handle other)
+    {
+        if (!block || !other)
+        {
+            return nullptr;
+        }
+
+        auto *block_ptr = handle_to_block(block);
+        auto *other_ptr = handle_to_block(other);
+
+        if (!block_ptr || !other_ptr || !*block_ptr || !*other_ptr)
+        {
+            return nullptr;
+        }
+
+        if (!(*block_ptr)->isMergeableWith(*other_ptr))
+        {
+            return nullptr;
+        }
+
+        std::shared_ptr<zir::ZIRBasicBlockImpl> merged = (*block_ptr)->mergeWith(*other_ptr);
+        if (!merged)
+        {
+            return nullptr;
+        }
+
+        return new std::shared_ptr<zir::ZIRBasicBlockImpl>(merged);
+    }
+
+    zir_block_handle zir_block_find_mergeable_successor(zir_block_handle block)
+    {
+        if (!block)
+        {
+            return nullptr;
+        }
+
+        auto *block_ptr = handle_to_block(block);
+        if (!block_ptr || !*block_ptr)
+        {
+            return nullptr;
+        }
+
+        std::shared_ptr<zir::ZIRBasicBlockImpl> successor = (*block_ptr)->findMergeableSuccessor();
+        if (!successor)
+        {
+            return nullptr;
+        }
+
+        return new std::shared_ptr<zir::ZIRBasicBlockImpl>(successor);
+    }
+
     // Value management
     zir_value_handle zir_create_int32_value(int32_t value)
     {

@@ -82,6 +82,22 @@ extern "C"
     size_t zir_function_remove_dead_blocks(zir_function_handle handle);
     bool zir_block_is_dead(zir_block_handle block, zir_function_handle func_handle);
 
+    // Block linking
+    void zir_block_add_predecessor(zir_block_handle block, zir_block_handle pred);
+    void zir_block_add_successor(zir_block_handle block, zir_block_handle succ);
+    void zir_block_remove_predecessor(zir_block_handle block, zir_block_handle pred);
+    void zir_block_remove_successor(zir_block_handle block, zir_block_handle succ);
+    size_t zir_block_get_predecessor_count(zir_block_handle block);
+    size_t zir_block_get_successor_count(zir_block_handle block);
+    bool zir_block_has_predecessor(zir_block_handle block, zir_block_handle pred);
+    bool zir_block_has_successor(zir_block_handle block, zir_block_handle succ);
+
+    // Block merging
+    bool zir_block_is_mergeable_with(zir_block_handle block, zir_block_handle other);
+    bool zir_block_is_safe_merge_with(zir_block_handle block, zir_block_handle other);
+    zir_block_handle zir_block_merge_with(zir_block_handle block, zir_block_handle other);
+    zir_block_handle zir_block_find_mergeable_successor(zir_block_handle block);
+
     // Value management
     zir_value_handle zir_create_int32_value(int32_t value);
     zir_value_handle zir_create_int64_value(int64_t value);

@@ -72,16 +72,6 @@ namespace zir
         return canReachHelper(target, visited);
     }
 
-    bool ZIRBasicBlockImpl::isReachableFrom(const std::shared_ptr<ZIRBasicBlockImpl> &start) const
-    {
-        if (!start)
-            return false;
-        // Create a non-const shared pointer to this block
-        auto nonConstThis = const_cast<ZIRBasicBlockImpl *>(this);
-        auto thisPtr = std::shared_ptr<ZIRBasicBlockImpl>(nonConstThis, [](ZIRBasicBlockImpl *) {});
-        return start->canReach(thisPtr);
-    }
-
     // Helper method for reachability analysis using DFS
     bool ZIRBasicBlockImpl::canReachHelper(
         const std::shared_ptr<ZIRBasicBlockImpl> &target,
@@ -285,5 +275,145 @@ namespace zir
         }
 
         return frontier;
+    }
+
+    // Check if merging with another block is safe
+    bool ZIRBasicBlockImpl::isSafeMergeWith(const std::shared_ptr<ZIRBasicBlockImpl> &other) const
+    {
+        // First check if blocks are mergeable at all
+        if (!isMergeableWith(other))
+            return false;
+
+        // Check for PHI nodes in the successor block
+        for (const auto &instr : other->instructions)
+        {
+            if (instr->getOpcode() == ZIROpcode::PHI)
+                return false; // PHI nodes make merging unsafe
+        }
+
+        // Check for terminator instructions in this block
+        for (const auto &instr : instructions)
+        {
+            if (instr->isTerminator() && instr != instructions.back())
+                return false; // Can't have terminator instructions except at the end
+
+            // Check for label references to the other block
+            if (instr->referencesLabel(other->getName()))
+                return false;
+        }
+
+        // Check for label references to this block in the other block
+        for (const auto &instr : other->instructions)
+        {
+            if (instr->referencesLabel(getName()))
+                return false;
+        }
+
+        // Check for variable definitions and uses
+        std::unordered_set<std::string> definedVars;
+        std::unordered_set<std::string> usedVars;
+
+        // Collect variable definitions and uses from both blocks
+        for (const auto &instr : instructions)
+        {
+            auto defs = instr->getDefinedVariables();
+            auto uses = instr->getUsedVariables();
+            definedVars.insert(defs.begin(), defs.end());
+            usedVars.insert(uses.begin(), uses.end());
+        }
+
+        for (const auto &instr : other->instructions)
+        {
+            auto defs = instr->getDefinedVariables();
+            auto uses = instr->getUsedVariables();
+
+            // Check for variable redefinition conflicts
+            for (const auto &def : defs)
+            {
+                if (definedVars.count(def) > 0)
+                    return false; // Variable is redefined
+            }
+
+            // Check for use-before-def conflicts
+            for (const auto &use : uses)
+            {
+                if (definedVars.count(use) == 0 && usedVars.count(use) > 0)
+                    return false; // Variable is used before definition
+            }
+        }
+
+        return true;
+    }
+
+    std::shared_ptr<ZIRBasicBlockImpl> ZIRBasicBlockImpl::mergeWith(const std::shared_ptr<ZIRBasicBlockImpl> &other)
+    {
+        if (!other || !isSafeMergeWith(other))
+        {
+            return nullptr;
+        }
+
+        // Create a new block with this block's name
+        auto mergedBlock = std::make_shared<ZIRBasicBlockImpl>(getName());
+
+        // Copy instructions from this block (except the terminator)
+        for (size_t i = 0; i < instructions.size() - 1; i++)
+        {
+            mergedBlock->addInstruction(instructions[i]);
+        }
+
+        // Copy all instructions from the other block
+        for (const auto &instr : other->instructions)
+        {
+            mergedBlock->addInstruction(instr);
+        }
+
+        // Update predecessors (keep this block's predecessors)
+        for (const auto &pred : predecessors)
+        {
+            mergedBlock->addPredecessor(pred);
+        }
+
+        // Update successors (take other block's successors)
+        for (const auto &succ : other->successors)
+        {
+            mergedBlock->addSuccessor(succ);
+        }
+
+        // Set parent function
+        mergedBlock->setParentFunction(parent_function);
+
+        return mergedBlock;
+    }
+
+    bool ZIRBasicBlockImpl::isMergeableWith(const std::shared_ptr<ZIRBasicBlockImpl> &other) const
+    {
+        // Must have exactly one successor (the other block)
+        if (successors.size() != 1 || *successors.begin() != other)
+            return false;
+
+        // Other block must have exactly one predecessor (this block)
+        if (other->predecessors.size() != 1 || *other->predecessors.begin() != shared_from_this())
+            return false;
+
+        // For now, we don't merge blocks that are part of critical edges
+        // This will be handled by the critical edge splitting pass later
+        if (isCriticalEdge(other))
+            return false;
+
+        return true;
+    }
+
+    std::shared_ptr<ZIRBasicBlockImpl> ZIRBasicBlockImpl::findMergeableSuccessor() const
+    {
+        // If we have exactly one successor, check if we can merge with it
+        if (successors.size() == 1)
+        {
+            auto successor = *successors.begin();
+            if (isMergeableWith(successor))
+            {
+                return successor;
+            }
+        }
+        return nullptr;
     }
 }

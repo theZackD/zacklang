@@ -176,6 +176,12 @@ namespace zir
         bool postDominates(const std::shared_ptr<ZIRBasicBlockImpl> &other) const;
         std::vector<std::shared_ptr<ZIRBasicBlockImpl>> getDominanceFrontier() const;
 
+        // Block merging
+        bool isMergeableWith(const std::shared_ptr<ZIRBasicBlockImpl> &other) const;
+        bool isSafeMergeWith(const std::shared_ptr<ZIRBasicBlockImpl> &other) const;
+        std::shared_ptr<ZIRBasicBlockImpl> mergeWith(const std::shared_ptr<ZIRBasicBlockImpl> &other);
+        std::shared_ptr<ZIRBasicBlockImpl> findMergeableSuccessor() const;
+
         // Reachability analysis
         bool isReachableFrom(const std::shared_ptr<ZIRBasicBlockImpl> &start) const
         {
@@ -241,6 +247,14 @@ namespace zir
         bool canReachHelper(const std::shared_ptr<ZIRBasicBlockImpl> &target,
                             std::unordered_set<const ZIRBasicBlockImpl *> &visited) const;
         void computeDominators(std::unordered_map<const ZIRBasicBlockImpl *, std::unordered_set<const ZIRBasicBlockImpl *>> &dominators) const;
+
+        // Check if the edge to the given successor is a critical edge
+        bool isCriticalEdge(const std::shared_ptr<ZIRBasicBlockImpl> &succ) const
+        {
+            // A critical edge is an edge from a block with multiple successors
+            // to a block with multiple predecessors
+            return successors.size() > 1 && succ->predecessors.size() > 1;
+        }
     };
 
 } // namespace zir

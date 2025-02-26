@@ -152,5 +152,32 @@ test_dead_block_bench: tests/zir/benchmarks/test_dead_block_bench.cpp $(ZIR_OBJS
 	./$@
 	rm -f $@
 
+# Add block merging test target
+test_block_merging: tests/zir/test_block_merging.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+	./$@
+	rm -f $@
+
+# Add merge safety test target
+.PHONY: test_merge_safety
+test_merge_safety: tests/zir/test_merge_safety.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -fsanitize=address $^ -o $@
+	./$@
+	rm -f $@
+
+# Add C API block merging test target
+.PHONY: test_c_api_block_merging
+test_c_api_block_merging: tests/zir/test_c_api_block_merging.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -fsanitize=address $^ -o $@
+	./$@
+	rm -f $@
+
+# Add block merging benchmark target
+.PHONY: test_block_merging_bench
+test_block_merging_bench: tests/zir/benchmarks/test_block_merging_bench.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -O3 $^ -o $@
+	./$@
+	rm -f $@
+
 # Update test target
-test: test_zir_basic test_zir_safety test_zir_memory test_zir_value test_zir_integer test_zir_float test_zir_boolean test_zir_string test_zir_c_api test_zir_basic_block test_zir_function test_zir_instruction test_zir_arithmetic test_zir_comparison test_zir_logical test_zir_abs_example test_zir_control_flow test_zir_block_links test_zir_graph_analysis test_zir_dead_blocks test_dead_block_bench
+test: test_zir_basic test_zir_safety test_zir_memory test_zir_value test_zir_integer test_zir_float test_zir_boolean test_zir_string test_zir_c_api test_zir_basic_block test_zir_function test_zir_instruction test_zir_arithmetic test_zir_comparison test_zir_logical test_zir_abs_example test_zir_control_flow test_zir_block_links test_zir_graph_analysis test_zir_dead_blocks test_dead_block_bench test_block_merging test_merge_safety test_c_api_block_merging test_block_merging_bench
