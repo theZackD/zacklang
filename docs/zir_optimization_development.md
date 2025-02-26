@@ -214,6 +214,97 @@ size_t ZIRFunctionPropagateConstants(ZIRFunctionRef function) {
 }
 ```
 
+## Example: Developing a Critical Edge Splitting Pass
+
+This section provides guidance on implementing the next planned optimization pass - Critical Edge Splitting.
+
+### 1. Understanding Critical Edges
+
+A critical edge is an edge in the control flow graph that goes from a block with multiple successors to a block with multiple predecessors. Critical edges can complicate certain optimizations, so splitting them by inserting an empty block can enable more effective optimizations.
+
+### 2. Analysis Phase Implementation
+
+Start by implementing the analysis methods:
+
+```cpp
+// In ZIRBasicBlockImpl class
+bool isCriticalEdge(const std::shared_ptr<ZIRBasicBlockImpl>& succ) const;
+std::vector<std::shared_ptr<ZIRBasicBlockImpl>> findCriticalEdges() const;
+bool isSafeToCriticalSplit(const std::shared_ptr<ZIRBasicBlockImpl>& succ) const;
+```
+
+The implementation should:
+
+1. Identify if a given edge is critical (block has multiple successors and target has multiple predecessors)
+2. Find all critical edges for a given function
+3. Verify that splitting is safe (e.g., not breaking PHI node semantics)
+
+### 3. Transformation Phase Implementation
+
+Next, implement the transformation methods:
+
+```cpp
+// In ZIRBasicBlockImpl class
+std::shared_ptr<ZIRBasicBlockImpl> splitCriticalEdge(
+    const std::shared_ptr<ZIRBasicBlockImpl>& succ);
+size_t splitAllCriticalEdges();
+```
+
+The implementation should:
+
+1. Create a new empty block
+2. Update control flow edges to insert the new block between the source and target
+3. Update any instructions (like branch instructions) that reference the old edge
+
+### 4. C API Integration
+
+Add the necessary C API functions in `zir_c_api.h`:
+
+```c
+bool zir_block_is_critical_edge(zir_block_handle block, zir_block_handle succ);
+zir_block_handle zir_block_split_critical_edge(zir_block_handle block,
+                                              zir_block_handle succ);
+size_t zir_function_split_all_critical_edges(zir_function_handle func);
+```
+
+And implement them in `zir_c_api.cpp`.
+
+### 5. Testing
+
+Create comprehensive tests:
+
+1. **Unit Tests** (`test_critical_edge_splitting.cpp`):
+
+   - Test identification of critical edges in various CFG structures
+   - Test edge splitting with simple and complex control flow
+   - Test safety validation
+
+2. **Integration Tests** (`test_c_api_critical_edge.cpp`):
+
+   - Test the C API functions
+   - Verify they work correctly with the existing codebase
+
+3. **Benchmarks** (`test_critical_edge_bench.cpp`):
+   - Measure performance on different CFG sizes and structures
+   - Compare before and after performance of other optimizations
+
+### 6. Documentation
+
+Update documentation files:
+
+1. Mark as complete in the roadmap
+2. Add details to the optimization passes documentation
+3. Update relevant READMEs
+
+### 7. Best Practices for Critical Edge Splitting
+
+- Name the inserted blocks clearly (e.g., "split_A_to_B")
+- Keep the inserted blocks empty when possible
+- Ensure proper handling of PHI nodes if they're affected
+- Consider the impact on debugging information
+
+Follow this guide to implement critical edge splitting, which will enhance the optimization pipeline and enable more effective optimizations in the future.
+
 ## Testing Optimization Passes
 
 ### Creating Test Cases

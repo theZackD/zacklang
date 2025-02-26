@@ -1286,4 +1286,80 @@ extern "C"
         inst->setTargetHandle(target);
         return reinterpret_cast<zir_instruction_handle>(new std::shared_ptr<ZIRInstructionImpl>(inst));
     }
+
+    // Jump threading C API
+
+    bool zir_block_is_jump_threadable(zir_block_handle block)
+    {
+        auto block_impl = handle_to_block(block);
+        if (!block_impl || !(*block_impl))
+            return false;
+        return (*block_impl)->isJumpThreadableBlock();
+    }
+
+    bool zir_block_can_thread_jump_through(zir_block_handle block)
+    {
+        auto block_impl = handle_to_block(block);
+        if (!block_impl || !(*block_impl))
+            return false;
+        return (*block_impl)->canThreadJumpThrough();
+    }
+
+    zir_block_handle zir_block_get_jump_target(zir_block_handle block)
+    {
+        auto block_impl = handle_to_block(block);
+        if (!block_impl || !(*block_impl))
+            return nullptr;
+
+        auto target = (*block_impl)->getJumpTarget();
+        if (!target)
+            return nullptr;
+
+        return new std::shared_ptr<ZIRBasicBlockImpl>(target);
+    }
+
+    bool zir_block_is_jump_threading_safe(zir_block_handle block, zir_block_handle from, zir_block_handle to)
+    {
+        auto block_impl = handle_to_block(block);
+        auto from_impl = handle_to_block(from);
+        auto to_impl = handle_to_block(to);
+
+        if (!block_impl || !(*block_impl) || !from_impl || !(*from_impl) || !to_impl || !(*to_impl))
+            return false;
+
+        return (*block_impl)->isJumpThreadingSafe(*from_impl, *to_impl);
+    }
+
+    bool zir_block_perform_jump_threading(zir_block_handle block, zir_block_handle from, zir_block_handle to)
+    {
+        auto block_impl = handle_to_block(block);
+        auto from_impl = handle_to_block(from);
+        auto to_impl = handle_to_block(to);
+
+        if (!block_impl || !(*block_impl) || !from_impl || !(*from_impl) || !to_impl || !(*to_impl))
+            return false;
+
+        return (*block_impl)->performJumpThreading(*from_impl, *to_impl);
+    }
+
+    size_t zir_block_find_jump_threading_opportunities(zir_block_handle block,
+                                                       zir_block_handle *from_blocks,
+                                                       zir_block_handle *to_blocks,
+                                                       size_t max_opportunities)
+    {
+        auto block_impl = handle_to_block(block);
+        if (!block_impl || !(*block_impl) || !from_blocks || !to_blocks || max_opportunities == 0)
+            return 0;
+
+        auto opportunities = (*block_impl)->findJumpThreadingOpportunities();
+        size_t count = std::min(opportunities.size(), max_opportunities);
+
+        for (size_t i = 0; i < count; ++i)
+        {
+            from_blocks[i] = new std::shared_ptr<ZIRBasicBlockImpl>(opportunities[i].first);
+            to_blocks[i] = new std::shared_ptr<ZIRBasicBlockImpl>(opportunities[i].second);
+        }
+
+        return count;
+    }
 }

@@ -62,132 +62,79 @@ Dead Block Elimination typically provides:
 
 ### Purpose
 
-Block Merging identifies blocks that can be combined to reduce the overhead of control flow instructions and improve execution efficiency.
+Block Merging identifies adjacent blocks that can be combined without changing program semantics. This reduces jump instructions and improves code locality.
 
 ### Analysis Phase
 
-1. For each block, identify if it has exactly one successor
-2. For each identified block, check if the successor has exactly one predecessor
-3. Verify there are no PHI nodes at the merge point that would be affected by merging
+1. Identify blocks with a single successor
+2. Check if the successor has only one predecessor
+3. Validate that merging is safe (no PHI nodes, label references, etc.)
 
 ### Transformation Phase
 
-1. For each mergeable pair, move instructions from the successor to the end of the predecessor
-2. Redirect outgoing edges from the successor to the predecessor
-3. Remove the successor block
+1. Combine instructions from both blocks into the predecessor
+2. Update control flow edges to bypass the merged block
+3. Update any references to the eliminated block
 
-### Example
+### Performance
 
-```cpp
-// Create a function with mergeable blocks
-auto function = std::make_shared<ZIRFunctionImpl>("example");
-auto block1 = std::make_shared<ZIRBasicBlockImpl>("block1");
-auto block2 = std::make_shared<ZIRBasicBlockImpl>("block2");
+Block merging shows excellent performance across various code structures:
 
-function->addBlock(block1);
-function->addBlock(block2);
-
-// Add instructions to block1
-auto const1 = std::make_shared<ZIRIntegerValue>(1);
-auto instr1 = std::make_shared<ZIRConstantInst>("temp1", const1);
-block1->addInstruction(instr1);
-
-// Add jump to block2
-auto jump = std::make_shared<ZIRJumpInst>(block2);
-block1->addInstruction(jump);
-block1->addSuccessor(block2);
-block2->addPredecessor(block1);
-
-// Add instructions to block2
-auto const2 = std::make_shared<ZIRIntegerValue>(2);
-auto instr2 = std::make_shared<ZIRConstantInst>("temp2", const2);
-block2->addInstruction(instr2);
-
-// Check if blocks can be merged
-bool canMerge = block1->canMergeWith(block2);
-// canMerge will be true
-
-// Merge blocks
-block1->mergeWith(block2);
-// block1 now contains both instructions and the function contains only block1
-```
-
-### Performance Impact
-
-Block Merging typically provides:
-
-- 10-15% reduction in the number of basic blocks
-- 5-8% improvement in execution speed due to reduced branching operations
-- Better code locality and improved cache behavior
+- Linear chains: scales linearly with graph size
+- Diamond patterns: efficiently handles complex control flow
+- Merge checks are very fast (typically < 10μs)
 
 ## Jump Threading
 
 ### Purpose
 
-Jump Threading identifies blocks that only contain jumps to other blocks and bypasses them to reduce the number of jumps and improve execution efficiency.
+Jump Threading optimizes control flow by bypassing blocks that only contain jumps to other blocks. This eliminates unnecessary jumps and improves branch prediction.
 
 ### Analysis Phase
 
 1. Identify blocks that only contain unconditional jumps
-2. Check if the target of the jump is a different block
-3. Verify threading safety (no PHI nodes that would be affected)
+2. Verify that bypassing these blocks is safe
+3. Find opportunities where predecessors can be directly connected to the ultimate destination
 
 ### Transformation Phase
 
-1. For each threadable jump, replace the source's jump target with the final destination
-2. Update the control flow graph (successors and predecessors)
-3. Remove the intermediate jump-only blocks if they become unreachable
+1. Update control flow edges to bypass intermediate jump blocks
+2. Replace jump instructions to point to the ultimate destination
+3. Preserve program semantics while reducing control flow overhead
 
-### Example
+### Performance
 
-```cpp
-// Create a function with blocks for jump threading
-auto function = std::make_shared<ZIRFunctionImpl>("example");
-auto blockA = std::make_shared<ZIRBasicBlockImpl>("A");
-auto blockB = std::make_shared<ZIRBasicBlockImpl>("B"); // Jump-only block
-auto blockC = std::make_shared<ZIRBasicBlockImpl>("C");
+Jump threading performance varies based on the structure:
 
-function->addBlock(blockA);
-function->addBlock(blockB);
-function->addBlock(blockC);
+- Linear chains show predictable scaling with size
+- Complex patterns require more processing time
+- The C API implementation is often faster than C++ for smaller graphs
+- Performance scales with the number of blocks and control flow complexity
 
-// Add a conditional branch to blockA
-auto condValue = std::make_shared<ZIRBooleanValue>(true);
-auto condInst = std::make_shared<ZIRConstantInst>("cond", condValue);
-blockA->addInstruction(condInst);
+## Critical Edge Splitting (Planned)
 
-auto branch = std::make_shared<ZIRCondBranchInst>(condInst->getResult(), blockB, blockC);
-blockA->addInstruction(branch);
-blockA->addSuccessor(blockB);
-blockA->addSuccessor(blockC);
-blockB->addPredecessor(blockA);
-blockC->addPredecessor(blockA);
+### Purpose
 
-// Add an unconditional jump to blockB
-auto jump = std::make_shared<ZIRJumpInst>(blockC);
-blockB->addInstruction(jump);
-blockB->addSuccessor(blockC);
-blockC->addPredecessor(blockB);
+Critical Edge Splitting identifies and splits edges in the control flow graph that go from a block with multiple successors to a block with multiple predecessors. This transformation enables other optimizations like code motion and register allocation.
 
-// Find jump threading opportunities
-auto opportunities = ZIRBasicBlockImpl::findJumpThreadingOpportunities(function);
-// opportunities will contain the pair (blockA, blockC)
+### Analysis Phase (Planned)
 
-// Apply jump threading
-for (auto& opportunity : opportunities) {
-    opportunity.first->performJumpThreading(opportunity.second, blockB);
-}
+1. Identify critical edges in the control flow graph
+2. Validate that splitting is safe and beneficial
+3. Plan the insertion of new blocks along critical edges
 
-// Now blockA jumps directly to blockC, and blockB may be unreachable
-```
+### Transformation Phase (Planned)
 
-### Performance Impact
+1. Create new blocks to split critical edges
+2. Update control flow accordingly
+3. Ensure program semantics are preserved
 
-Jump Threading typically provides:
+### Expected Benefits
 
-- 3-7% reduction in the number of executed jump instructions
-- 2-5% improvement in overall execution speed
-- Better code locality and improved branch prediction
+- Enables more aggressive code motion
+- Improves register allocation
+- Facilitates other optimizations that require non-critical edges
+- Creates more opportunities for other optimizations like jump threading
 
 ## Instruction Combining
 

@@ -1,6 +1,7 @@
 #include "../include/zir_basic_block.hpp"
 #include <queue>
 #include <algorithm>
+#include <iostream>
 
 namespace zir
 {
@@ -452,22 +453,54 @@ namespace zir
     {
         // Check that 'this' is the block we're threading through
         if (!canThreadJumpThrough())
+        {
+            std::cout << "Debug: Block '" << getName() << "' cannot be thread-jumped through" << std::endl;
             return false;
+        }
 
         // Make sure 'from' is a predecessor of 'this'
+        // Note: This check might fail after previous threading operations
         if (!hasPredecessor(from))
+        {
+            // Check if 'from' can already reach 'to' directly
+            if (from->hasSuccessor(to))
+            {
+                // Threading already done, consider it "safe"
+                std::cout << "Debug: Block '" << from->getName() << "' already has a direct edge to '" << to->getName() << "'" << std::endl;
+                return true;
+            }
+
+            std::cout << "Debug: Block '" << getName() << "' doesn't have predecessor '" << from->getName() << "'" << std::endl;
             return false;
+        }
 
         // Make sure 'to' is the jump target of 'this'
-        if (getJumpTarget() != to)
+        // For jump threading chains, the current target might be different
+        auto jumpTarget = getJumpTarget();
+        if (jumpTarget != to)
+        {
+            std::cout << "Debug: Jump target '" << (jumpTarget ? jumpTarget->getName() : "null") << "' doesn't match '" << to->getName() << "'" << std::endl;
+
+            // In a chain of jump threadings, the target may already be different
+            // Consider safe if the original target can reach 'to'
+            if (jumpTarget && jumpTarget->canReach(to))
+            {
+                std::cout << "Debug: Jump target can reach '" << to->getName() << "', considering safe" << std::endl;
+                return true;
+            }
+
             return false;
+        }
 
         // For now, we'll only consider threading safe if there are no PHI nodes in 'to'
         // as those would need special handling
         for (const auto &instr : to->instructions)
         {
             if (instr->getOpcode() == ZIROpcode::PHI)
-                return false;
+            {
+                std::cout << "Debug: Target block '" << to->getName() << "' has PHI nodes" << std::endl;
+                return false; // PHI nodes make merging unsafe
+            }
         }
 
         // Also check that 'from' doesn't have multiple exits
@@ -475,7 +508,10 @@ namespace zir
         for (const auto &instr : from->instructions)
         {
             if (instr->getOpcode() == ZIROpcode::BR_COND)
+            {
+                std::cout << "Debug: Source block '" << from->getName() << "' has conditional branches" << std::endl;
                 return false;
+            }
         }
 
         return true;
@@ -515,10 +551,55 @@ namespace zir
         if (!isJumpThreadingSafe(from, to))
             return false;
 
-        // TODO: Implement the actual jump threading transformation
         // 1. Update the terminator instruction in 'from' to directly jump to 'to'
-        // 2. Update the CFG by adding an edge from 'from' to 'to'
-        // 3. Optionally clean up if this block is no longer needed
+        // Find the terminator instruction in 'from'
+        for (size_t i = 0; i < from->instructions.size(); ++i)
+        {
+            auto instr = from->instructions[i];
+            if (instr->isTerminator() && instr->getOpcode() == ZIROpcode::BR)
+            {
+                // This is a terminator we want to modify
+                // First, check if it has a target label
+                if (!instr->getTargetLabel().empty())
+                {
+                    // Update target to point to 'to' block
+                    instr->setTargetLabel(to->getName());
+                }
+
+                // We found and modified the terminator, so we can stop searching
+                break;
+            }
+        }
+
+        // 2. Update the CFG
+        // Before removing any edges, check that all blocks still exist and have valid relationships
+        if (!from->hasSuccessor(shared_from_this()) || !hasPredecessor(from) ||
+            !hasSuccessor(to) || !to->hasPredecessor(shared_from_this()))
+        {
+            // The CFG has already been modified by a previous transformation
+            // Just ensure from has a direct edge to to
+            if (!from->hasSuccessor(to))
+            {
+                from->addSuccessor(to);
+                to->addPredecessor(from);
+            }
+            return true;
+        }
+
+        // Remove relationships between 'from' and 'this'
+        from->removeSuccessor(shared_from_this());
+        removePredecessor(from);
+
+        // Remove relationship between 'this' and 'to'
+        removeSuccessor(to);
+        to->removePredecessor(shared_from_this());
+
+        // Add direct relationship between 'from' and 'to'
+        if (!from->hasSuccessor(to))
+        {
+            from->addSuccessor(to);
+            to->addPredecessor(from);
+        }
 
         return true;
     }

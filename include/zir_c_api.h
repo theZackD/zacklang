@@ -98,6 +98,21 @@ extern "C"
     zir_block_handle zir_block_merge_with(zir_block_handle block, zir_block_handle other);
     zir_block_handle zir_block_find_mergeable_successor(zir_block_handle block);
 
+    // Jump threading analysis
+    bool zir_block_is_jump_threadable(zir_block_handle block);
+    bool zir_block_can_thread_jump_through(zir_block_handle block);
+    zir_block_handle zir_block_get_jump_target(zir_block_handle block);
+    bool zir_block_is_jump_threading_safe(zir_block_handle block, zir_block_handle from, zir_block_handle to);
+
+    // Jump threading transformation
+    bool zir_block_perform_jump_threading(zir_block_handle block, zir_block_handle from, zir_block_handle to);
+
+    // Jump threading opportunities
+    size_t zir_block_find_jump_threading_opportunities(zir_block_handle block,
+                                                       zir_block_handle *from_blocks,
+                                                       zir_block_handle *to_blocks,
+                                                       size_t max_opportunities);
+
     // Value management
     zir_value_handle zir_create_int32_value(int32_t value);
     zir_value_handle zir_create_int64_value(int64_t value);

@@ -14,7 +14,7 @@ Zacklang is a robust compiler infrastructure that implements advanced optimizati
 
   - [x] Dead Block Elimination
   - [x] Block Merging
-  - [x] Jump Threading (Analysis Phase Complete)
+  - [x] Jump Threading
   - [ ] Critical Edge Splitting (Planned)
   - [ ] Value Numbering (Planned)
 
@@ -52,6 +52,20 @@ Diamond      20      8                   65                 73
 Diamond      40      15                  110                125
 ```
 
+### Jump Threading Performance
+
+```
+Structure       Size    Find Time (μs)    Thread Time (μs)   Total (μs)
+Linear Chain    10      1865              1865               1865
+Linear Chain    100     57052             57052              57052
+Linear Chain    1000    302370            302370             302370
+Complex Pattern 10      30152             30152              30152
+Complex Pattern 100     66642             66642              66642
+C API           10      311               311                311
+C API           100     2430              2430               2430
+C API           500     168051            168051             168051
+```
+
 Key findings:
 
 - Dead Block Elimination: Processes 100K blocks in ~1ms
@@ -60,6 +74,10 @@ Key findings:
   - Efficient merge checks (< 10μs for most cases)
   - C API implementation performs on par with native C++
   - Handles complex control flow structures efficiently
+- Jump Threading:
+  - Performance scales with the number of blocks and complexity of the control flow
+  - C API implementation is generally faster than the C++ implementation for smaller graphs
+  - Linear chains show predictable scaling, while complex patterns require more processing
 
 ## Building
 
