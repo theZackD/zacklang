@@ -1363,119 +1363,91 @@ extern "C"
         return count;
     }
 
-    // Critical edge detection and validation
+    // Note: This function will be completed when jump threading transformation is implemented
+    // This is just a stub for now
+    return false;
+}
 
-    bool zir_block_has_critical_edges(zir_block_handle block)
+// Critical Edge Analysis API
+
+bool zir_block_is_critical_edge(zir_block_handle block, zir_block_handle succ)
+{
+    // Validate parameters
+    if (!block || !succ)
+        return false;
+
+    auto block_impl = reinterpret_cast<zir::ZIRBasicBlockImpl *>(block);
+    auto succ_impl = reinterpret_cast<zir::ZIRBasicBlockImpl *>(succ);
+
+    // Check if the edge is critical - a critical edge is one where the source has multiple
+    // successors and the target has multiple predecessors
+    return block_impl->getSuccessorCount() > 1 && succ_impl->getPredecessorCount() > 1 &&
+           block_impl->hasSuccessor(std::shared_ptr<zir::ZIRBasicBlockImpl>(succ_impl, [](zir::ZIRBasicBlockImpl *) {}));
+}
+
+bool zir_block_is_critical_edge_split_safe(zir_block_handle block, zir_block_handle succ)
+{
+    // Validate parameters
+    if (!block || !succ)
+        return false;
+
+    auto block_impl = reinterpret_cast<zir::ZIRBasicBlockImpl *>(block);
+    auto succ_impl = reinterpret_cast<zir::ZIRBasicBlockImpl *>(succ);
+
+    return block_impl->isCriticalEdgeSplitSafe(std::shared_ptr<zir::ZIRBasicBlockImpl>(succ_impl, [](zir::ZIRBasicBlockImpl *) {}));
+}
+
+size_t zir_block_find_critical_edges(zir_block_handle block,
+                                     zir_block_handle *source_blocks,
+                                     zir_block_handle *target_blocks,
+                                     size_t max_edges)
+{
+    // Validate parameters
+    if (!block || (!source_blocks && max_edges > 0) || (!target_blocks && max_edges > 0))
+        return 0;
+
+    auto block_impl = reinterpret_cast<zir::ZIRBasicBlockImpl *>(block);
+
+    // Find critical edges
+    auto edges = block_impl->findCriticalEdges();
+
+    // Copy results to output arrays up to max_edges
+    size_t count = std::min(edges.size(), max_edges);
+    for (size_t i = 0; i < count; ++i)
     {
-        if (!block)
-            return false;
-
-        auto blockPtr = handle_to_block(block);
-        if (!blockPtr || !*blockPtr)
-            return false;
-
-        return (*blockPtr)->hasCriticalEdges();
+        if (source_blocks)
+            source_blocks[i] = edges[i].first.get();
+        if (target_blocks)
+            target_blocks[i] = edges[i].second.get();
     }
 
-    bool zir_block_is_critical_edge_to_successor(zir_block_handle block, zir_block_handle succ)
+    return edges.size();
+}
+
+size_t zir_function_find_critical_edges(zir_function_handle function,
+                                        zir_block_handle *source_blocks,
+                                        zir_block_handle *target_blocks,
+                                        size_t max_edges)
+{
+    // Validate parameters
+    if (!function || (!source_blocks && max_edges > 0) || (!target_blocks && max_edges > 0))
+        return 0;
+
+    auto func_impl = reinterpret_cast<zir::ZIRFunctionImpl *>(function);
+
+    // Find critical edges
+    auto edges = func_impl->findCriticalEdges();
+
+    // Copy results to output arrays up to max_edges
+    size_t count = std::min(edges.size(), max_edges);
+    for (size_t i = 0; i < count; ++i)
     {
-        if (!block || !succ)
-            return false;
-
-        auto blockPtr = handle_to_block(block);
-        auto succPtr = handle_to_block(succ);
-        if (!blockPtr || !*blockPtr || !succPtr || !*succPtr)
-            return false;
-
-        return (*blockPtr)->isCriticalEdgeToSuccessor(*succPtr);
+        if (source_blocks)
+            source_blocks[i] = edges[i].first.get();
+        if (target_blocks)
+            target_blocks[i] = edges[i].second.get();
     }
 
-    bool zir_block_is_split_safe(zir_block_handle block, zir_block_handle succ)
-    {
-        if (!block || !succ)
-            return false;
-
-        auto blockPtr = handle_to_block(block);
-        auto succPtr = handle_to_block(succ);
-        if (!blockPtr || !*blockPtr || !succPtr || !*succPtr)
-            return false;
-
-        return (*blockPtr)->isSplitSafe(*succPtr);
-    }
-
-    size_t zir_block_find_critical_edges(zir_block_handle block,
-                                         zir_block_handle *source_blocks,
-                                         zir_block_handle *target_blocks,
-                                         size_t max_edges)
-    {
-        if (!block || !source_blocks || !target_blocks || max_edges == 0)
-            return 0;
-
-        auto blockPtr = handle_to_block(block);
-        if (!blockPtr || !*blockPtr)
-            return 0;
-
-        auto criticalEdges = (*blockPtr)->findCriticalEdges();
-        size_t edgeCount = std::min(criticalEdges.size(), max_edges);
-
-        for (size_t i = 0; i < edgeCount; ++i)
-        {
-            // Create new handles for the source and target blocks
-            auto sourcePtr = new std::shared_ptr<ZIRBasicBlockImpl>(criticalEdges[i].first);
-            auto targetPtr = new std::shared_ptr<ZIRBasicBlockImpl>(criticalEdges[i].second);
-
-            // Assign to the output arrays
-            source_blocks[i] = sourcePtr;
-            target_blocks[i] = targetPtr;
-        }
-
-        return edgeCount;
-    }
-
-    // Critical edge splitting
-    zir_block_handle zir_block_split_critical_edge(zir_block_handle block, zir_block_handle succ)
-    {
-        if (!block || !succ)
-            return nullptr;
-
-        auto blockPtr = handle_to_block(block);
-        auto succPtr = handle_to_block(succ);
-        if (!blockPtr || !*blockPtr || !succPtr || !*succPtr)
-            return nullptr;
-
-        auto splitBlock = (*blockPtr)->splitCriticalEdge(*succPtr);
-        if (!splitBlock)
-            return nullptr;
-
-        // Create a handle for the new block
-        return new std::shared_ptr<ZIRBasicBlockImpl>(splitBlock);
-    }
-
-    size_t zir_block_split_all_critical_edges(zir_block_handle block)
-    {
-        if (!block)
-            return 0;
-
-        auto blockPtr = handle_to_block(block);
-        if (!blockPtr || !*blockPtr)
-            return 0;
-
-        // Find all critical edges
-        auto criticalEdges = (*blockPtr)->findCriticalEdges();
-        size_t splitCount = 0;
-
-        // Split each critical edge
-        for (const auto &edge : criticalEdges)
-        {
-            auto successor = edge.second;
-            if ((*blockPtr)->splitCriticalEdge(successor) != nullptr)
-            {
-                splitCount++;
-            }
-        }
-
-        return splitCount;
-    }
-
-    // Jump threading opportunities
+    return edges.size();
+}
 }

@@ -15,7 +15,7 @@ Zacklang is a robust compiler infrastructure that implements advanced optimizati
   - [x] Dead Block Elimination
   - [x] Block Merging
   - [x] Jump Threading
-  - [ ] Critical Edge Splitting (Planned)
+  - [x] Critical Edge Detection and Splitting
   - [ ] Value Numbering (Planned)
 
 - **Robust IR System**
@@ -143,6 +143,17 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 - Detects opportunities for control flow optimization
 - Prevents unsafe transformations in the presence of PHI nodes
 - Thoroughly tested with various control flow patterns
+
+### 4. Critical Edge Detection and Splitting [x]
+
+- Identifies critical edges in the control flow graph (edges from blocks with multiple successors to blocks with multiple predecessors)
+- Validates which critical edges are safe to split
+- Implements transformation to split critical edges by inserting new blocks
+- Preserves control flow semantics when splitting edges
+- Ensures phi nodes and other instructions are properly handled
+- Provides comprehensive C API support for edge detection, validation and splitting
+- Properly handles error conditions and edge cases
+- Robust test suite covering various control flow patterns and transformations
 
 ## License
 

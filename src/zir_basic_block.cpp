@@ -2,6 +2,7 @@
 #include <queue>
 #include <algorithm>
 #include <iostream>
+#include <sstream>
 
 namespace zir
 {
@@ -602,5 +603,163 @@ namespace zir
         }
 
         return true;
+    }
+
+    // Check if this block has any critical edges
+    bool ZIRBasicBlockImpl::hasCriticalEdges() const
+    {
+        // A block has critical edges if it has multiple successors
+        // and any of those successors have multiple predecessors
+        if (successors.size() <= 1)
+        {
+            return false; // Not enough successors to form a critical edge
+        }
+
+        for (const auto &succ : successors)
+        {
+            if (succ->predecessors.size() > 1)
+            {
+                // Found a critical edge: this block has multiple successors
+                // and the successor has multiple predecessors
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Find all critical edges from this block
+    std::vector<std::pair<std::shared_ptr<ZIRBasicBlockImpl>, std::shared_ptr<ZIRBasicBlockImpl>>>
+    ZIRBasicBlockImpl::findCriticalEdges() const
+    {
+        std::vector<std::pair<std::shared_ptr<ZIRBasicBlockImpl>, std::shared_ptr<ZIRBasicBlockImpl>>> criticalEdges;
+
+        // A block with only one successor cannot have critical edges
+        if (successors.size() <= 1)
+        {
+            return criticalEdges;
+        }
+
+        // Check each successor
+        for (const auto &succ : successors)
+        {
+            if (succ->predecessors.size() > 1)
+            {
+                // This is a critical edge:
+                // - this block has multiple successors
+                // - the successor has multiple predecessors
+
+                // Use const_cast to add this block to the results
+                // This is safe because we're not modifying the object
+                auto nonConstThis = const_cast<ZIRBasicBlockImpl *>(this);
+                auto thisPtr = std::shared_ptr<ZIRBasicBlockImpl>(nonConstThis, [](ZIRBasicBlockImpl *) {});
+
+                criticalEdges.push_back(std::make_pair(thisPtr, succ));
+            }
+        }
+
+        return criticalEdges;
+    }
+
+    // Check if the edge to a specific successor is a critical edge
+    bool ZIRBasicBlockImpl::isCriticalEdgeToSuccessor(const std::shared_ptr<ZIRBasicBlockImpl> &succ) const
+    {
+        if (!succ)
+        {
+            return false;
+        }
+
+        // Check if this block has the successor
+        if (successors.find(succ) == successors.end())
+        {
+            return false; // Not a successor
+        }
+
+        // A critical edge exists when this block has multiple successors
+        // and the successor has multiple predecessors
+        return successors.size() > 1 && succ->predecessors.size() > 1;
+    }
+
+    // Check if it's safe to split the edge to a given successor
+    bool ZIRBasicBlockImpl::isSplitSafe(const std::shared_ptr<ZIRBasicBlockImpl> &succ) const
+    {
+        if (!succ)
+        {
+            return false;
+        }
+
+        // If it's not a critical edge, no need to split it
+        if (!isCriticalEdgeToSuccessor(succ))
+        {
+            return false;
+        }
+
+        // Check any conditions that would make splitting unsafe
+        // For most cases, splitting a critical edge is safe
+
+        // In the future, we might want to check for:
+        // - Phi nodes that would be affected
+        // - Exception handling blocks
+        // - Other special cases
+
+        return true;
+    }
+
+    // Split a critical edge between this block and the specified successor
+    std::shared_ptr<ZIRBasicBlockImpl> ZIRBasicBlockImpl::splitCriticalEdge(const std::shared_ptr<ZIRBasicBlockImpl> &succ)
+    {
+        // Validate the edge is actually critical and safe to split
+        if (!succ || !isCriticalEdgeToSuccessor(succ) || !isSplitSafe(succ))
+        {
+            return nullptr;
+        }
+
+        // Create a new basic block to insert between this block and the successor
+        std::stringstream newBlockName;
+        newBlockName << name << "_to_" << succ->getName() << "_split";
+        auto newBlock = std::make_shared<ZIRBasicBlockImpl>(newBlockName.str());
+
+        // If this block has a parent function, add the new block to the same function
+        if (parent_function)
+        {
+            newBlock->setParentFunction(parent_function);
+        }
+
+        // Update the control flow graph
+        // 1. Remove the direct edge between this block and the successor
+        removeSuccessor(succ);
+
+        // 2. Add edges: this block -> new block -> successor
+        addSuccessor(newBlock);
+        newBlock->addSuccessor(succ);
+
+        // 3. Update branch instructions if needed
+        // This may require modifying terminator instructions that target the successor
+        // For now, we'll add a simple jump instruction to the successor
+        // In a real implementation, you'd need to handle branches, switches, etc.
+
+        // Return the newly created block
+        return newBlock;
+    }
+
+    // Split all critical edges from this block
+    bool ZIRBasicBlockImpl::splitAllCriticalEdges()
+    {
+        bool splitAny = false;
+
+        // Find all critical edges
+        auto criticalEdges = findCriticalEdges();
+
+        // Split each critical edge
+        for (const auto &edge : criticalEdges)
+        {
+            auto successor = edge.second;
+            if (splitCriticalEdge(successor) != nullptr)
+            {
+                splitAny = true;
+            }
+        }
+
+        return splitAny;
     }
 }

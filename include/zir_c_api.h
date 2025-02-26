@@ -107,6 +107,19 @@ extern "C"
     // Jump threading transformation
     bool zir_block_perform_jump_threading(zir_block_handle block, zir_block_handle from, zir_block_handle to);
 
+    // Critical edge detection and validation
+    bool zir_block_has_critical_edges(zir_block_handle block);
+    bool zir_block_is_critical_edge_to_successor(zir_block_handle block, zir_block_handle succ);
+    bool zir_block_is_split_safe(zir_block_handle block, zir_block_handle succ);
+    size_t zir_block_find_critical_edges(zir_block_handle block,
+                                         zir_block_handle *source_blocks,
+                                         zir_block_handle *target_blocks,
+                                         size_t max_edges);
+
+    // Critical edge splitting
+    zir_block_handle zir_block_split_critical_edge(zir_block_handle block, zir_block_handle succ);
+    size_t zir_block_split_all_critical_edges(zir_block_handle block);
+
     // Jump threading opportunities
     size_t zir_block_find_jump_threading_opportunities(zir_block_handle block,
                                                        zir_block_handle *from_blocks,

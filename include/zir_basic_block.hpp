@@ -195,6 +195,17 @@ namespace zir
         bool performJumpThreading(const std::shared_ptr<ZIRBasicBlockImpl> &from,
                                   const std::shared_ptr<ZIRBasicBlockImpl> &to);
 
+        // Critical edge detection
+        bool hasCriticalEdges() const;
+        std::vector<std::pair<std::shared_ptr<ZIRBasicBlockImpl>, std::shared_ptr<ZIRBasicBlockImpl>>>
+        findCriticalEdges() const;
+        bool isCriticalEdgeToSuccessor(const std::shared_ptr<ZIRBasicBlockImpl> &succ) const;
+        bool isSplitSafe(const std::shared_ptr<ZIRBasicBlockImpl> &succ) const;
+
+        // Critical edge splitting
+        std::shared_ptr<ZIRBasicBlockImpl> splitCriticalEdge(const std::shared_ptr<ZIRBasicBlockImpl> &succ);
+        bool splitAllCriticalEdges();
+
         // Reachability analysis
         bool isReachableFrom(const std::shared_ptr<ZIRBasicBlockImpl> &start) const
         {
