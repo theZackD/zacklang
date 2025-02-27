@@ -183,18 +183,18 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 - Properly handles error conditions and edge cases
 - Robust test suite covering various control flow patterns and transformations
 
-### 5. Value Numbering [✓]
+### 5. Value Numbering [x]
 
-- ✅ Identifies equivalent expressions within a basic block
-- ✅ Detects redundant computations for optimization
-- ✅ Implements local value numbering for basic blocks
-- ✅ Implements global value numbering across multiple blocks
-- ✅ Successfully identifies redundant NOP instructions
-- ✅ Identifies redundant arithmetic operations (ADD, MUL, etc.)
-- ✅ Methods to find redundant instruction pairs both locally and globally
-- ✅ Tests for verifying redundancy detection
-- ✅ C API functions for compiler integration
-- ✅ Benchmark performance with various control flow patterns
+- [x] Identifies equivalent expressions within a basic block
+- [x] Detects redundant computations for optimization
+- [x] Implements local value numbering for basic blocks
+- [x] Implements global value numbering across multiple blocks
+- [x] Successfully identifies redundant NOP instructions
+- [x] Identifies redundant arithmetic operations (ADD, MUL, etc.)
+- [x] Methods to find redundant instruction pairs both locally and globally
+- [x] Tests for verifying redundancy detection
+- [x] C API functions for compiler integration
+- [x] Benchmark performance with various control flow patterns
 
 ## License
 
