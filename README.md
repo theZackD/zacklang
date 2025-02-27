@@ -66,6 +66,20 @@ C API           100     2430              2430               2430
 C API           500     168051            168051             168051
 ```
 
+### Critical Edge Performance
+
+```
+Pattern        Size    Detection (μs)    Splitting (μs)
+Linear         10      76                103
+Linear         100     41                356
+Linear         500     194               1684
+Linear         1000    575               2245
+Diamond        10      12                29
+Diamond        100     108               324
+Diamond        500     341               2187
+Diamond        1000    1272              5969
+```
+
 Key findings:
 
 - Dead Block Elimination: Processes 100K blocks in ~1ms
@@ -78,6 +92,11 @@ Key findings:
   - Performance scales with the number of blocks and complexity of the control flow
   - C API implementation is generally faster than the C++ implementation for smaller graphs
   - Linear chains show predictable scaling, while complex patterns require more processing
+- Critical Edge Splitting:
+  - Detection is very fast, processing 1000 blocks in under 1.3ms
+  - Splitting operation scales linearly with graph size
+  - Diamond patterns take longer to process due to increased edge density
+  - Memory overhead is minimal as split blocks are created only when needed
 
 ## Building
 
