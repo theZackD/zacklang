@@ -16,6 +16,8 @@
 #include <cstdio>
 #include <iostream>
 #include <string>
+#include <vector>
+#include <unordered_map>
 
 using namespace zir;
 
@@ -39,6 +41,17 @@ static std::shared_ptr<ZIRValueImpl> *handle_to_value(zir_value_handle handle)
 {
     return reinterpret_cast<std::shared_ptr<ZIRValueImpl> *>(handle);
 }
+
+// Helper structs for value numbering C API
+struct ZIRValueMap
+{
+    std::unordered_map<std::string, size_t> map;
+};
+
+struct ZIRRedundantPairs
+{
+    std::vector<std::pair<std::shared_ptr<zir::ZIRInstructionImpl>, std::shared_ptr<zir::ZIRInstructionImpl>>> pairs;
+};
 
 extern "C"
 {
@@ -1478,4 +1491,97 @@ extern "C"
     }
 
     // Jump threading opportunities
+
+    // Basic Block Value Numbering API
+    int ZIRBasicBlock_hasRedundantComputations(ZIRBasicBlock *block)
+    {
+        auto bb = reinterpret_cast<zir::ZIRBasicBlockImpl *>(block);
+        if (!bb)
+            return 0;
+        return bb->hasRedundantComputations() ? 1 : 0;
+    }
+
+    ZIRValueMap *ZIRBasicBlock_performLocalValueNumbering(ZIRBasicBlock *block)
+    {
+        auto bb = reinterpret_cast<zir::ZIRBasicBlockImpl *>(block);
+        if (!bb)
+            return nullptr;
+
+        auto valueMap = new ZIRValueMap();
+        valueMap->map = bb->performLocalValueNumbering();
+        return valueMap;
+    }
+
+    ZIRRedundantPairs *ZIRBasicBlock_findRedundantComputations(ZIRBasicBlock *block)
+    {
+        auto bb = reinterpret_cast<zir::ZIRBasicBlockImpl *>(block);
+        if (!bb)
+            return nullptr;
+
+        auto redundantPairs = new ZIRRedundantPairs();
+
+        // Convert from pairs of indices to pairs of instruction pointers
+        auto indexPairs = bb->findRedundantComputations();
+        for (const auto &pair : indexPairs)
+        {
+            auto instr1 = bb->getInstruction(pair.first);
+            auto instr2 = bb->getInstruction(pair.second);
+            if (instr1 && instr2)
+            {
+                redundantPairs->pairs.push_back({instr1, instr2});
+            }
+        }
+
+        return redundantPairs;
+    }
+
+    // Function Value Numbering API
+    int ZIRFunction_hasGlobalRedundantComputations(ZIRFunction *function)
+    {
+        auto func = reinterpret_cast<zir::ZIRFunctionImpl *>(function);
+        if (!func)
+            return 0;
+        return func->hasGlobalRedundantComputations() ? 1 : 0;
+    }
+
+    ZIRValueMap *ZIRFunction_performGlobalValueNumbering(ZIRFunction *function)
+    {
+        auto func = reinterpret_cast<zir::ZIRFunctionImpl *>(function);
+        if (!func)
+            return nullptr;
+
+        auto valueMap = new ZIRValueMap();
+        valueMap->map = func->performGlobalValueNumbering();
+        return valueMap;
+    }
+
+    ZIRRedundantPairs *ZIRFunction_findGlobalRedundantComputations(ZIRFunction *function)
+    {
+        auto func = reinterpret_cast<zir::ZIRFunctionImpl *>(function);
+        if (!func)
+            return nullptr;
+
+        auto redundantPairs = new ZIRRedundantPairs();
+
+        // This is already in the correct format - pairs of instruction pointers
+        redundantPairs->pairs = func->findGlobalRedundantComputations();
+        return redundantPairs;
+    }
+
+    // Resource cleanup
+    void ZIRValueMap_destroy(ZIRValueMap *value_map)
+    {
+        if (value_map)
+        {
+            delete value_map;
+        }
+    }
+
+    void ZIRRedundantPairs_destroy(ZIRRedundantPairs *redundant_pairs)
+    {
+        if (redundant_pairs)
+        {
+            delete redundant_pairs;
+        }
+    }
 }

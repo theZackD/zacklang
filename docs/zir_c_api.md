@@ -238,23 +238,66 @@ size_t ZIRFunctionMergeBlocks(ZIRFunctionRef function);
 
 // Apply jump threading optimizations
 size_t ZIRFunctionApplyJumpThreading(ZIRFunctionRef function);
+
+// Value Numbering Functions
+
+// Perform local value numbering on a block
+ZIRValueMap* ZIRBasicBlock_performLocalValueNumbering(ZIRBasicBlock* block);
+
+// Check if a block has redundant computations
+int ZIRBasicBlock_hasRedundantComputations(ZIRBasicBlock* block);
+
+// Find redundant computations in a block
+ZIRRedundantPairs* ZIRBasicBlock_findRedundantComputations(ZIRBasicBlock* block);
+
+// Perform global value numbering on a function
+ZIRValueMap* ZIRFunction_performGlobalValueNumbering(ZIRFunction* function);
+
+// Check if a function has global redundant computations
+int ZIRFunction_hasGlobalRedundantComputations(ZIRFunction* function);
+
+// Find global redundant computations in a function
+ZIRRedundantPairs* ZIRFunction_findGlobalRedundantComputations(ZIRFunction* function);
+
+// Helper functions for working with value numbering results
+void ZIRValueMap_destroy(ZIRValueMap* value_map);
+void ZIRRedundantPairs_destroy(ZIRRedundantPairs* redundant_pairs);
 ```
 
-### Example: Applying Optimizations
+### Example: Using Value Numbering
 
 ```c
-// Create and set up a function
-ZIRFunctionRef func = createComplexFunction();
+// Create a function with blocks
+ZIRFunction* function = zir_create_function("example");
+ZIRBasicBlock* block1 = zir_create_basic_block("block1");
+zir_function_add_block(function, block1);
 
-// Apply optimization passes
-size_t dead_blocks_removed = ZIRFunctionRemoveDeadBlocks(func);
-size_t blocks_merged = ZIRFunctionMergeBlocks(func);
-size_t jumps_threaded = ZIRFunctionApplyJumpThreading(func);
+// Add instructions with redundant computations
+ZIRValue* int5 = zir_create_int32_value(5);
+ZIRValue* int10 = zir_create_int32_value(10);
+ZIRInstruction* add1 = zir_create_add_instruction(int5, int10);
+ZIRInstruction* add2 = zir_create_add_instruction(int5, int10); // Redundant with add1
+zir_block_add_instruction(block1, add1);
+zir_block_add_instruction(block1, add2);
 
-printf("Optimizations applied:\n");
-printf("  Dead blocks removed: %zu\n", dead_blocks_removed);
-printf("  Blocks merged: %zu\n", blocks_merged);
-printf("  Jumps threaded: %zu\n", jumps_threaded);
+// Perform local value numbering
+ZIRValueMap* value_map = ZIRBasicBlock_performLocalValueNumbering(block1);
+
+// Check for redundant computations
+int has_redundant = ZIRBasicBlock_hasRedundantComputations(block1);
+if (has_redundant) {
+    // Find the redundant pairs
+    ZIRRedundantPairs* pairs = ZIRBasicBlock_findRedundantComputations(block1);
+
+    // Process the pairs
+    // ...
+
+    // Clean up
+    ZIRRedundantPairs_destroy(pairs);
+}
+
+// Clean up
+ZIRValueMap_destroy(value_map);
 ```
 
 ## Serialization and Debugging

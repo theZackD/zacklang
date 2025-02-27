@@ -16,7 +16,8 @@ Zacklang is a robust compiler infrastructure that implements advanced optimizati
   - [x] Block Merging
   - [x] Jump Threading
   - [x] Critical Edge Detection and Splitting
-  - [ ] Value Numbering (Planned)
+  - [x] Local Value Numbering
+  - [x] Global Value Numbering
 
 - **Robust IR System**
 
@@ -78,6 +79,14 @@ Diamond        10      12                29
 Diamond        100     108               324
 Diamond        500     341               2187
 Diamond        1000    1272              5969
+```
+
+### Value Numbering Performance
+
+```
+Value Numbering Type    Metrics                              Timing (μs)
+Local                   50 unique, 750 redundant ops         VN: 522, Detection: 838
+Global                  100 blocks, 1500 total ops           VN: 732, Detection: 1488
 ```
 
 Key findings:
@@ -173,6 +182,19 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 - Provides comprehensive C API support for edge detection, validation and splitting
 - Properly handles error conditions and edge cases
 - Robust test suite covering various control flow patterns and transformations
+
+### 5. Value Numbering [✓]
+
+- ✅ Identifies equivalent expressions within a basic block
+- ✅ Detects redundant computations for optimization
+- ✅ Implements local value numbering for basic blocks
+- ✅ Implements global value numbering across multiple blocks
+- ✅ Successfully identifies redundant NOP instructions
+- ✅ Identifies redundant arithmetic operations (ADD, MUL, etc.)
+- ✅ Methods to find redundant instruction pairs both locally and globally
+- ✅ Tests for verifying redundancy detection
+- ✅ C API functions for compiler integration
+- ✅ Benchmark performance with various control flow patterns
 
 ## License
 

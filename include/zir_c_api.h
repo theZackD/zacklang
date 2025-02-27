@@ -22,6 +22,15 @@ extern "C"
     typedef void *zir_function_handle;
     typedef void *zir_instruction_handle;
 
+    // Opaque types
+    typedef void *zir_module_handle;
+
+    // Opaque types for value numbering
+    typedef struct ZIRValueMap ZIRValueMap;
+    typedef struct ZIRRedundantPairs ZIRRedundantPairs;
+    typedef void *ZIRBasicBlock;
+    typedef void *ZIRFunction;
+
     // Basic builder lifecycle
     ZIRBuilder *zir_create_builder(void);
     void zir_destroy_builder(ZIRBuilder *builder);
@@ -180,6 +189,72 @@ extern "C"
     zir_block_handle zir_jump_get_target(zir_instruction_handle jump);
     zir_value_handle zir_return_get_value(zir_instruction_handle ret);
     bool zir_return_is_void(zir_instruction_handle ret);
+
+    // Value Numbering API
+
+    /**
+     * Checks if a basic block has redundant computations
+     *
+     * @param block The ZIRBasicBlock to check
+     * @return 1 if there are redundant computations, 0 otherwise
+     */
+    int ZIRBasicBlock_hasRedundantComputations(ZIRBasicBlock *block);
+
+    /**
+     * Performs local value numbering on a basic block
+     *
+     * @param block The ZIRBasicBlock to process
+     * @return A ZIRValueMap containing the value numbering results
+     */
+    ZIRValueMap *ZIRBasicBlock_performLocalValueNumbering(ZIRBasicBlock *block);
+
+    /**
+     * Finds redundant computations in a basic block
+     *
+     * @param block The ZIRBasicBlock to analyze
+     * @return A ZIRRedundantPairs containing pairs of redundant instructions
+     */
+    ZIRRedundantPairs *ZIRBasicBlock_findRedundantComputations(ZIRBasicBlock *block);
+
+    /**
+     * Checks if a function has redundant computations across basic blocks
+     *
+     * @param function The ZIRFunction to check
+     * @return 1 if there are redundant computations, 0 otherwise
+     */
+    int ZIRFunction_hasGlobalRedundantComputations(ZIRFunction *function);
+
+    /**
+     * Performs global value numbering on a function
+     *
+     * @param function The ZIRFunction to process
+     * @return A ZIRValueMap containing the global value numbering results
+     */
+    ZIRValueMap *ZIRFunction_performGlobalValueNumbering(ZIRFunction *function);
+
+    /**
+     * Finds redundant computations across basic blocks in a function
+     *
+     * @param function The ZIRFunction to analyze
+     * @return A ZIRRedundantPairs containing pairs of redundant instructions
+     */
+    ZIRRedundantPairs *ZIRFunction_findGlobalRedundantComputations(ZIRFunction *function);
+
+    // Clean up value numbering resources
+
+    /**
+     * Releases the memory allocated for a ZIRValueMap
+     *
+     * @param value_map The ZIRValueMap to release
+     */
+    void ZIRValueMap_destroy(ZIRValueMap *value_map);
+
+    /**
+     * Releases the memory allocated for a ZIRRedundantPairs
+     *
+     * @param redundant_pairs The ZIRRedundantPairs to release
+     */
+    void ZIRRedundantPairs_destroy(ZIRRedundantPairs *redundant_pairs);
 
 #ifdef __cplusplus
 }

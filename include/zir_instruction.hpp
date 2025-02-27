@@ -77,7 +77,7 @@ namespace zir
             return vars;
         }
 
-        std::unordered_set<std::string> getUsedVariables() const
+        virtual std::unordered_set<std::string> getUsedVariables() const
         {
             std::unordered_set<std::string> vars;
             // In a real implementation, this would analyze operands

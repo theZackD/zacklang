@@ -206,6 +206,25 @@ namespace zir
         std::shared_ptr<ZIRBasicBlockImpl> splitCriticalEdge(const std::shared_ptr<ZIRBasicBlockImpl> &succ);
         bool splitAllCriticalEdges();
 
+        // Value numbering
+        struct ValueNumber
+        {
+            size_t number;
+            std::string expression;
+            ZIROpcode opcode;
+            std::vector<size_t> operands;
+
+            bool operator==(const ValueNumber &other) const
+            {
+                return opcode == other.opcode && operands == other.operands;
+            }
+        };
+
+        // Local value numbering
+        std::unordered_map<std::string, size_t> performLocalValueNumbering();
+        bool hasRedundantComputations() const;
+        std::vector<std::pair<size_t, size_t>> findRedundantComputations() const;
+
         // Reachability analysis
         bool isReachableFrom(const std::shared_ptr<ZIRBasicBlockImpl> &start) const
         {

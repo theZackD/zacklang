@@ -240,5 +240,19 @@ test_critical_edge_bench: tests/zir/benchmarks/test_critical_edge_bench.cpp $(ZI
 	./$@
 	rm -f $@
 
+# Add value numbering test target
+.PHONY: test_value_numbering
+test_value_numbering: tests/zir/test_value_numbering.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -fsanitize=address $^ -o $@
+	./$@
+	rm -f $@
+
+# Add value numbering benchmark target
+.PHONY: test_value_numbering_bench
+test_value_numbering_bench: tests/zir/benchmarks/test_value_numbering_bench.cpp $(ZIR_OBJS)
+	$(CXX) $(CXXFLAGS) -O3 $^ -o $@
+	./$@
+	rm -f $@
+
 # Update test target
-test: test_zir_basic test_zir_safety test_zir_memory test_zir_value test_zir_integer test_zir_float test_zir_boolean test_zir_string test_zir_c_api test_zir_basic_block test_zir_function test_zir_instruction test_zir_arithmetic test_zir_comparison test_zir_logical test_zir_abs_example test_zir_control_flow test_zir_block_links test_zir_graph_analysis test_zir_dead_blocks test_block_merging test_merge_safety test_c_api_block_merging test_jump_threading test_jump_threading_transform test_simple_dead_blocks test_c_api_jump_threading test_critical_edges test_c_api_critical_edges test_critical_edge_splitting test_c_api_critical_edge_splitting test_critical_edge_bench
+test: test_zir_basic test_zir_safety test_zir_memory test_zir_value test_zir_integer test_zir_float test_zir_boolean test_zir_string test_zir_c_api test_zir_basic_block test_zir_function test_zir_instruction test_zir_arithmetic test_zir_comparison test_zir_logical test_zir_abs_example test_zir_control_flow test_zir_block_links test_zir_graph_analysis test_zir_dead_blocks test_block_merging test_merge_safety test_c_api_block_merging test_jump_threading test_jump_threading_transform test_simple_dead_blocks test_c_api_jump_threading test_critical_edges test_c_api_critical_edges test_critical_edge_splitting test_c_api_critical_edge_splitting test_critical_edge_bench test_value_numbering test_value_numbering_bench
