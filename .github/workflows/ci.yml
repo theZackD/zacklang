@@ -77,8 +77,12 @@ jobs:
         run: conda install -y "llvmdev=20" "clang=20" zlib zstd
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Configure
+        # Name the compilers explicitly: with conda's clang on PATH, CMake would otherwise pick
+        # clang for C and MSVC for C++, and refuses to mix them. clang is still used by
+        # zackc to link programs (ZACK_CC below).
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl
           -DLLVM_DIR="$CONDA_PREFIX/Library/lib/cmake/llvm"
           -DCMAKE_PREFIX_PATH="$CONDA_PREFIX/Library"
       - name: Build

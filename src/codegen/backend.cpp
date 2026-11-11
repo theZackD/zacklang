@@ -195,7 +195,12 @@ std::optional<std::string> Backend::runPasses(const std::string& pipeline) {
         LLVMRunPasses(impl_->module, pipeline.c_str(), impl_->targetMachine, options);
     LLVMDisposePassBuilderOptions(options);
     if (error != nullptr) {
-        return takeMessage(LLVMGetErrorMessage(error));
+        // Unlike other LLVM messages, this one is not malloc'd, so it has its own release
+        // function (LLVMDisposeMessage here would be an allocator mismatch).
+        char* message = LLVMGetErrorMessage(error);
+        std::string text = message != nullptr ? message : "";
+        LLVMDisposeErrorMessage(message);
+        return text;
     }
     return std::nullopt;
 }

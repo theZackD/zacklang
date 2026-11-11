@@ -331,30 +331,31 @@ ctest --test-dir build --output-on-failure
 
 | Item | macOS arm64 | Linux | Windows |
 |------|-------------|-------|---------|
-| Builds with warnings as errors | yes (Apple clang 21, LLVM 20.1.6 from Homebrew) | not run | not run |
-| All 32 tests pass | yes, also under ASan and UBSan; the process tests also passed 20 repeats in a row | not run | not run |
-| `40 + 2` program exits with code 42 | yes | not run | not run |
-| `libzackrt` print and panic (exit code 101) | yes | not run | not run |
-| CI workflow | syntax checked only | written, never run | written, **experimental**, never run |
+| Builds with warnings as errors | yes (Apple clang 21, LLVM 20.1.6 from Homebrew) | yes (GitHub Actions, Ubuntu 24.04, LLVM 20 from apt.llvm.org) | not yet: configure failed (see below) |
+| All 32 tests pass | yes; also under ASan and UBSan locally, and the process tests passed 20 repeats in a row | yes in the plain build; in the sanitizer job 31 passed and 1 found a real bug (fixed, not yet re-run) | not run |
+| `40 + 2` program exits with code 42 | yes | yes (part of the 32 tests) | not run |
+| `libzackrt` print and panic (exit code 101) | yes | yes (part of the 32 tests) | not run |
+| CI job | passed | plain build passed, sanitizer job failed | experimental job failed at Configure |
 
-The Windows branches of `src/driver/process.cpp` have never been compiled. The CI workflow in `.github/workflows/ci.yml` has never been executed; Linux and Windows results will come from its first runs.
+Source: the first CI run, on commit `9008e6b`. The fixes made after it (the allocator mismatch and the Windows compiler selection) have not been through CI yet. The Windows branches of `src/driver/process.cpp` have never been compiled.
 
 ### LLVM C API: what the spike showed
 
 - The whole `Backend` (declare functions, constants, `add`, calls, return, verify, run passes, print IR, emit an object file) is 229 lines of implementation behind a 77-line header that includes no LLVM header.
-- Awkward parts, all absorbed by `Backend`: everything is an opaque handle and the type is passed explicitly (`LLVMBuildCall2` needs the function type); messages are `malloc`ed strings released with `LLVMDisposeMessage`; the builder, module, context, target machine and target data each have their own dispose function; `LLVMTargetMachineEmitToFile` takes a non-const `char*` path; a call returning `void` must not be given a name.
+- Awkward parts, all absorbed by `Backend`: everything is an opaque handle and the type is passed explicitly (`LLVMBuildCall2` needs the function type); most messages are `malloc`ed strings released with `LLVMDisposeMessage`, but the message from `LLVMGetErrorMessage` is not, and has its own `LLVMDisposeErrorMessage` (see Other findings); the builder, module, context, target machine and target data each have their own dispose function; `LLVMTargetMachineEmitToFile` takes a non-const `char*` path; a call returning `void` must not be given a name.
 - Error paths work: `LLVMVerifyModule` reports a block with no terminator and `LLVMRunPasses` reports an unknown pipeline, both as messages (unit tests cover both).
 - The IR builder folds constants: `40 + 2` is emitted as `ret i32 42`. Tests must never depend on the shape of the generated IR (D13).
 - Not yet exercised: debug information, the optimization pipeline (`default<O2>`), overflow intrinsics, structs and arrays, anything beyond `i32` and pointers.
-- Gate G0 is partial: on macOS nothing argues for switching to the C++ API (D3 stands for now), but the gate stays open until Linux and Windows results exist.
+- Gate G0 is partial: on macOS and Linux nothing argues for switching to the C++ API (D3 stands for now), but the gate stays open until Windows has been shown to work.
 
 ### Other findings
 
 - **LLVM version check.** LLVM's own CMake version file only accepts an exact `major.minor`, so `find_package(LLVM 20)` rejects 20.1.6 (D50).
 - **Sanitizers and the runtime.** Building `libzackrt` with sanitizers made linking user programs fail with undefined `___asan_*` symbols, so the runtime is excluded (D50).
 - **SIGPIPE on macOS.** A child that exits without reading a large standard input made the parent die with SIGPIPE, even with the signal blocked in the writing thread, because macOS delivers it to the whole process. `runProcessCaptured` now sets the per-descriptor `F_SETNOSIGPIPE` flag on macOS; a unit test covers it.
+- **Mixing LLVM's two message-release functions is a real bug, found only on Linux.** `LLVMGetErrorMessage` returns memory allocated with `new[]`. Releasing it with `LLVMDisposeMessage` (which calls `free`) worked on macOS and in the plain Linux build, but AddressSanitizer on Linux reported an allocator mismatch. `Backend::runPasses` now uses `LLVMDisposeErrorMessage`. This is why the sanitizer job exists.
 - **Packaging.** With Homebrew's LLVM, `zackc` is about 77 MB and depends at run time on Homebrew's `libz3` and `libzstd`. Plan item 10.6 will have to decide between shared LLVM, fewer components, or stripping.
-- **Windows (unverified).** The official LLVM Windows installer ships no CMake development files, so the experimental CI job takes LLVM 20 and clang from conda-forge, builds in Release mode, and links with `clang` inside the Visual Studio environment. Open questions: whether that LLVM works, whether `clang` links the runtime built by MSVC, and whether building LLVM from source (cached) is the more reliable route.
+- **Windows (first CI run).** The official LLVM Windows installer ships no CMake development files, so the experimental job takes LLVM 20 and clang from conda-forge. In the first run, installing them worked (Clang 20.1.8) and the Visual Studio environment loaded, but **Configure failed**: with conda's `clang` on `PATH`, CMake chose clang for C and MSVC for C++ and refuses to mix them. The workflow now names the compilers explicitly (`cl` for building, `clang` for linking programs through `ZACK_CC`). That fix has not been run yet. Still open: whether the build and tests then pass, whether `clang` links the runtime built by MSVC, and whether building LLVM from source (cached) is the more reliable route.
 
 ## Cross-cutting Rules
 
