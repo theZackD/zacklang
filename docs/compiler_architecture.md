@@ -18,9 +18,10 @@ How the ZackLang compiler (`zackc`) is structured: the stages, the data that flo
 10. [Code Generation](#code-generation)
 11. [Runtime Library](#runtime-library)
 12. [Driver and Build Modes](#driver-and-build-modes)
-13. [Cross-cutting Rules](#cross-cutting-rules)
-14. [Testing Strategy](#testing-strategy)
-15. [Extension Points](#extension-points)
+13. [Build and Toolchain](#build-and-toolchain)
+14. [Cross-cutting Rules](#cross-cutting-rules)
+15. [Testing Strategy](#testing-strategy)
+16. [Extension Points](#extension-points)
 
 ## Goals
 
@@ -308,7 +309,52 @@ zackc --dump-ast file.zl           print the AST (for tests)
 
 - **Exit codes of `zackc`:** 0 success, 1 the program has errors, 2 bad usage or an internal compiler error.
 - **Object file:** produced through the LLVM target machine for the host triple (or `--target`).
-- **Linking:** `zackc` invokes the system C compiler driver (`clang`) to link the object file, `libzackrt` and the platform C library. The linker command is configurable (environment variable). *To verify during Phase 0:* the exact link command on each platform, especially Windows (MSVC runtime and linker versus lld), and where LLVM 20 headers and libraries come from on Windows.
+- **Linking (D51):** `zackc` invokes the system C compiler driver to link the object file, `libzackrt` and the platform C library. The command is `cc` on Unix-like systems and `clang` on Windows, and can be overridden with the `ZACK_CC` environment variable. Programs are launched with argument arrays, never through a shell, so paths with spaces work. To be revisited close to a release. See [Build and Toolchain](#build-and-toolchain) for what has and has not been verified.
+
+## Build and Toolchain
+
+What Phase 0 (plan items 0.1 to 0.7) has shown so far. Only macOS has been run.
+
+### Building
+
+```
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+- Requirements: CMake 3.20 or newer, a C++20 compiler, a C11 compiler, **LLVM 20** development files, and network access the first time you configure (CMake downloads Catch2, pinned by version and hash, D48). No Python is needed.
+- CMake looks for LLVM 20 in the usual places (Homebrew `llvm@20`, `/usr/lib/llvm-20`). Pass `-DLLVM_DIR=<dir containing LLVMConfig.cmake>` to point it elsewhere. A different LLVM major version is rejected with a clear message (D2, D50).
+- Options: `-DZACK_WARNINGS_AS_ERRORS=ON` (used in CI) and `-DZACK_SANITIZE=ON` (AddressSanitizer and UndefinedBehaviorSanitizer on the compiler's own code; never on `libzackrt`, D50).
+
+### What has been verified
+
+| Item | macOS arm64 | Linux | Windows |
+|------|-------------|-------|---------|
+| Builds with warnings as errors | yes (Apple clang 21, LLVM 20.1.6 from Homebrew) | not run | not run |
+| All 32 tests pass | yes, also under ASan and UBSan; the process tests also passed 20 repeats in a row | not run | not run |
+| `40 + 2` program exits with code 42 | yes | not run | not run |
+| `libzackrt` print and panic (exit code 101) | yes | not run | not run |
+| CI workflow | syntax checked only | written, never run | written, **experimental**, never run |
+
+The Windows branches of `src/driver/process.cpp` have never been compiled. The CI workflow in `.github/workflows/ci.yml` has never been executed; Linux and Windows results will come from its first runs.
+
+### LLVM C API: what the spike showed
+
+- The whole `Backend` (declare functions, constants, `add`, calls, return, verify, run passes, print IR, emit an object file) is 229 lines of implementation behind a 77-line header that includes no LLVM header.
+- Awkward parts, all absorbed by `Backend`: everything is an opaque handle and the type is passed explicitly (`LLVMBuildCall2` needs the function type); messages are `malloc`ed strings released with `LLVMDisposeMessage`; the builder, module, context, target machine and target data each have their own dispose function; `LLVMTargetMachineEmitToFile` takes a non-const `char*` path; a call returning `void` must not be given a name.
+- Error paths work: `LLVMVerifyModule` reports a block with no terminator and `LLVMRunPasses` reports an unknown pipeline, both as messages (unit tests cover both).
+- The IR builder folds constants: `40 + 2` is emitted as `ret i32 42`. Tests must never depend on the shape of the generated IR (D13).
+- Not yet exercised: debug information, the optimization pipeline (`default<O2>`), overflow intrinsics, structs and arrays, anything beyond `i32` and pointers.
+- Gate G0 is partial: on macOS nothing argues for switching to the C++ API (D3 stands for now), but the gate stays open until Linux and Windows results exist.
+
+### Other findings
+
+- **LLVM version check.** LLVM's own CMake version file only accepts an exact `major.minor`, so `find_package(LLVM 20)` rejects 20.1.6 (D50).
+- **Sanitizers and the runtime.** Building `libzackrt` with sanitizers made linking user programs fail with undefined `___asan_*` symbols, so the runtime is excluded (D50).
+- **SIGPIPE on macOS.** A child that exits without reading a large standard input made the parent die with SIGPIPE, even with the signal blocked in the writing thread, because macOS delivers it to the whole process. `runProcessCaptured` now sets the per-descriptor `F_SETNOSIGPIPE` flag on macOS; a unit test covers it.
+- **Packaging.** With Homebrew's LLVM, `zackc` is about 77 MB and depends at run time on Homebrew's `libz3` and `libzstd`. Plan item 10.6 will have to decide between shared LLVM, fewer components, or stripping.
+- **Windows (unverified).** The official LLVM Windows installer ships no CMake development files, so the experimental CI job takes LLVM 20 and clang from conda-forge, builds in Release mode, and links with `clang` inside the Visual Studio environment. Open questions: whether that LLVM works, whether `clang` links the runtime built by MSVC, and whether building LLVM from source (cached) is the more reliable route.
 
 ## Cross-cutting Rules
 

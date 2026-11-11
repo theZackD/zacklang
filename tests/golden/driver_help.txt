@@ -1,0 +1,5 @@
+Usage: zackc [options]
+
+Options:
+  --help      Show this help
+  --version   Show the compiler and LLVM versions

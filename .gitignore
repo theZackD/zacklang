@@ -1,9 +1,10 @@
 # Build artifacts
 *.o
-*.out
-test_*
-!tests/
 *.exe
+
+# CMake build trees
+build/
+build-*/
 
 # LLVM IR files
 *.ll

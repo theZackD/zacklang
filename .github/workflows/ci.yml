@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # macOS and Linux. They prove the Phase 0 toolchain on two of the three target platforms
+  # (decision D45).
+  build-test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (arm64)
+            os: macos-latest
+            install: brew install llvm@20
+          - name: Linux (x86-64)
+            os: ubuntu-24.04
+            install: |
+              wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 20
+              sudo apt-get install -y llvm-20-dev libzstd-dev zlib1g-dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install LLVM 20
+        run: ${{ matrix.install }}
+      - name: Configure
+        run: cmake -S . -B build -DZACK_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build -j 4
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  # The same build with AddressSanitizer and UndefinedBehaviorSanitizer on the compiler itself.
+  sanitizers:
+    name: Linux sanitizers
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install LLVM 20
+        run: |
+          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 20
+          sudo apt-get install -y llvm-20-dev libzstd-dev zlib1g-dev
+      - name: Configure
+        run: cmake -S . -B build -DZACK_WARNINGS_AS_ERRORS=ON -DZACK_SANITIZE=ON
+      - name: Build
+        run: cmake --build build -j 4
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  # EXPERIMENTAL. Windows is a Phase 0 risk (plan items 0.6 and 0.7): the official LLVM Windows
+  # installer ships no CMake development files, so LLVM 20 and clang come from conda-forge here.
+  # This job has never been run. It may fail until the toolchain is sorted out, which is why it
+  # does not block the other jobs.
+  windows-experimental:
+    name: Windows (experimental)
+    runs-on: windows-latest
+    continue-on-error: true
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          channels: conda-forge
+          channel-priority: strict
+          auto-activate-base: false
+          activate-environment: zack
+      - name: Install LLVM 20 and clang
+        run: conda install -y "llvmdev=20" "clang=20" zlib zstd
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DLLVM_DIR="$CONDA_PREFIX/Library/lib/cmake/llvm"
+          -DCMAKE_PREFIX_PATH="$CONDA_PREFIX/Library"
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+        env:
+          ZACK_CC: clang

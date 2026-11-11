@@ -25,7 +25,7 @@ The phased plan for building the ZackLang compiler (`zackc`). It is the checklis
 
 | Phase | Name | Milestone | Status |
 |-------|------|-----------|--------|
-| 0 | Foundations and spikes | G0: toolchain proven on all platforms | [ ] |
+| 0 | Foundations and spikes | G0: toolchain proven on all platforms | [~] |
 | 1 | Common infrastructure | | [ ] |
 | 2 | Lexer | | [ ] |
 | 3 | AST and parser | | [ ] |
@@ -38,7 +38,7 @@ The phased plan for building the ZackLang compiler (`zackc`). It is the checklis
 | 10 | Performance and release quality | **v0.1 release** | [ ] |
 | 11 | Path to self-hosting | **M4**: the compiler compiles itself | [ ] |
 
-**Current phase: 0, not started.**
+**Current phase: 0, in progress.** Items 0.1 to 0.5 work on macOS and are marked `[~]`: by the rules above they only become `[x]` once CI passes on every platform. Item 0.6 (CI) is written but has never run, so Linux and Windows are unverified, and gate G0 (0.7) stays open until they are. See [Build and Toolchain](compiler_architecture.md#build-and-toolchain).
 
 **Why this order.** The front end (phases 1 to 3) is finished first because it is well specified and has no external dependency. Phase 4 then builds a thin, complete compiler for the numeric subset, so there is a real working compiler early (the priority from the start of the project). Later phases widen the language one feature group at a time, always end to end (parse, check, generate, run, test) rather than building a whole stage at a time.
 
@@ -46,24 +46,30 @@ The phased plan for building the ZackLang compiler (`zackc`). It is the checklis
 
 Goal: prove the toolchain works on macOS, Linux and Windows before writing real compiler code.
 
-- [ ] **0.1 Repository skeleton** (S). CMake project, C++20 for the compiler, C11 for the runtime, the directory layout from the architecture doc, strict warnings, `.gitignore`, `.clang-format`.
+- [~] **0.1 Repository skeleton** (S). CMake project, C++20 for the compiler, C11 for the runtime, the directory layout from the architecture doc, strict warnings, `.gitignore`, `.clang-format`.
   - Done when: an empty `zackc` builds with one command on each platform.
   - Tests: build only.
-- [ ] **0.2 Test infrastructure** (M). A unit test framework; a golden-file runner (compare tool output with an expected file); an end-to-end runner (compile a `.zl`, run it, compare standard output and exit code with expected files); everything wired into `ctest`.
+  - Status: macOS arm64 verified (Apple clang 21, warnings as errors). Linux and Windows: pending CI.
+- [~] **0.2 Test infrastructure** (M). A unit test framework; a golden-file runner (compare tool output with an expected file); an end-to-end runner (compile a `.zl`, run it, compare standard output and exit code with expected files); everything wired into `ctest`.
   - Done when: one sample of each test kind passes under `ctest`.
   - Tests: the samples themselves.
-- [ ] **0.3 LLVM 20 integration** (M). CMake finds LLVM 20 headers and libraries on each OS and links the C API.
+  - Status: macOS verified (decisions D48, D49): Catch2 unit tests, golden tests and end-to-end tests all run under `ctest`, and the C++ referee has tests proving it fails on wrong expectations. Linux and Windows: pending CI.
+- [~] **0.3 LLVM 20 integration** (M). CMake finds LLVM 20 headers and libraries on each OS and links the C API.
   - Done when: a test program prints the LLVM version string on each platform.
-  - Tests: that program.
-- [ ] **0.4 Backend spike** (M). Using only the C API, build `main` returning `40 + 2`, emit an object file and textual IR, link with the system compiler.
+  - Tests: that program (`zackc --version`) and a unit test of the pinned major version.
+  - Status: macOS verified (LLVM 20.1.6). Linux and Windows: pending CI. Decision D50.
+- [~] **0.4 Backend spike** (M). Using only the C API, build `main` returning `40 + 2`, emit an object file and textual IR, link with the system compiler.
   - Done when: the produced executable exits with code 42, and notes on how awkward the C API felt are written down.
   - Tests: end-to-end test of the exit code.
-- [ ] **0.5 Runtime spike** (S). A `libzackrt` with `zack_print_i32` and `zack_panic`; the spike module calls them.
+  - Status: macOS verified; notes are in the architecture doc (Build and Toolchain). Linux and Windows: pending CI.
+- [~] **0.5 Runtime spike** (S). A `libzackrt` with `zack_print_i32` and `zack_panic`; the spike module calls them.
   - Done when: a program prints `42`; another exits with code 101 and a message on standard error.
   - Tests: end-to-end tests of both.
-- [ ] **0.6 Continuous integration** (M). CI on macOS, Linux and Windows: build, run all tests.
+  - Status: macOS verified. Linux and Windows: pending CI.
+- [~] **0.6 Continuous integration** (M). CI on macOS, Linux and Windows: build, run all tests.
   - Done when: green on all three. The working link command and the source of LLVM 20 on Windows are written in the architecture doc.
   - Tests: CI itself.
+  - Status: `.github/workflows/ci.yml` written with four jobs (macOS, Linux, Linux with sanitizers, experimental Windows). Syntax checked only; **never run**. The first push will show the real results, and fixing what fails is part of this item.
 - [ ] **0.7 Gate G0** (S). Decide with evidence: keep the LLVM C API (D3) or switch `Backend` to the C++ API; confirm the link strategy (D45); confirm Windows is practical.
   - Done when: D3 and D45 are confirmed or amended in the decision log and the architecture doc.
 
