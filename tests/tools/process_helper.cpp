@@ -13,6 +13,11 @@
 #include <string>
 #include <thread>
 
+#if defined(_WIN32)
+#include <fcntl.h>
+#include <io.h>
+#endif
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         return 64;
@@ -22,6 +27,12 @@ int main(int argc, char** argv) {
         return std::atoi(argv[2]);
     }
     if (mode == "echo-stdin") {
+#if defined(_WIN32)
+        // Windows streams are in text mode by default and would turn "\n" into "\r\n", which
+        // would make the launcher look wrong when it is the helper that changed the bytes.
+        _setmode(_fileno(stdin), _O_BINARY);
+        _setmode(_fileno(stdout), _O_BINARY);
+#endif
         char buffer[4096];
         std::size_t count = 0;
         while ((count = std::fread(buffer, 1, sizeof(buffer), stdin)) > 0) {

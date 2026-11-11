@@ -331,13 +331,13 @@ ctest --test-dir build --output-on-failure
 
 | Item | macOS arm64 | Linux | Windows |
 |------|-------------|-------|---------|
-| Builds with warnings as errors | yes (Apple clang 21, LLVM 20.1.6 from Homebrew) | yes (GitHub Actions, Ubuntu 24.04, LLVM 20 from apt.llvm.org) | not yet: configure failed (see below) |
-| All 32 tests pass | yes; also under ASan and UBSan locally, and the process tests passed 20 repeats in a row | yes in the plain build; in the sanitizer job 31 passed and 1 found a real bug (fixed, not yet re-run) | not run |
-| `40 + 2` program exits with code 42 | yes | yes (part of the 32 tests) | not run |
-| `libzackrt` print and panic (exit code 101) | yes | yes (part of the 32 tests) | not run |
-| CI job | passed | plain build passed, sanitizer job failed | experimental job failed at Configure |
+| Builds with warnings as errors | yes (Apple clang 21, LLVM 20.1.6 from Homebrew) | yes (GitHub Actions, Ubuntu 24.04, LLVM 20 from apt.llvm.org; run 1) | builds (GitHub Actions, MSVC `cl`, LLVM 20 from conda-forge, Release; run 2). That job does not yet treat warnings as errors |
+| All 32 tests pass | yes; also under ASan and UBSan locally, and the process tests passed 20 repeats in a row | run 1: plain build 32 of 32; sanitizer job 31 of 32, the failure being a real bug (fixed). Run 2: both Linux jobs could not install LLVM (see below), so the fix is not yet confirmed | run 2: 31 of 32; the failure was a bug in the test helper (fixed, not yet re-run) |
+| `40 + 2` program exits with code 42 | yes | yes (part of the 32 tests) | yes (part of the 32 tests, run 2) |
+| `libzackrt` print and panic (exit code 101) | yes | yes (part of the 32 tests) | yes (part of the 32 tests, run 2): the program is linked with `clang`, run, and exits with 101 |
+| Latest CI result | passed (runs 1 and 2) | run 1: plain passed, sanitizers failed on the bug; run 2: both jobs failed while installing LLVM because Ubuntu's package servers were unreachable (not a code failure) | run 2: configure and build passed, 1 test failed |
 
-Source: the first CI run, on commit `9008e6b`. The fixes made after it (the allocator mismatch and the Windows compiler selection) have not been through CI yet. The Windows branches of `src/driver/process.cpp` have never been compiled.
+Sources: CI run 1 (commit `9008e6b`) and run 2 (commit `e683024`). The Windows launcher code in `src/driver/process.cpp` compiled and worked in run 2, including capturing output, exit codes, timeouts and large inputs. The one-line test-helper fix that followed has not been through CI yet.
 
 ### LLVM C API: what the spike showed
 
@@ -355,7 +355,9 @@ Source: the first CI run, on commit `9008e6b`. The fixes made after it (the allo
 - **SIGPIPE on macOS.** A child that exits without reading a large standard input made the parent die with SIGPIPE, even with the signal blocked in the writing thread, because macOS delivers it to the whole process. `runProcessCaptured` now sets the per-descriptor `F_SETNOSIGPIPE` flag on macOS; a unit test covers it.
 - **Mixing LLVM's two message-release functions is a real bug, found only on Linux.** `LLVMGetErrorMessage` returns memory allocated with `new[]`. Releasing it with `LLVMDisposeMessage` (which calls `free`) worked on macOS and in the plain Linux build, but AddressSanitizer on Linux reported an allocator mismatch. `Backend::runPasses` now uses `LLVMDisposeErrorMessage`. This is why the sanitizer job exists.
 - **Packaging.** With Homebrew's LLVM, `zackc` is about 77 MB and depends at run time on Homebrew's `libz3` and `libzstd`. Plan item 10.6 will have to decide between shared LLVM, fewer components, or stripping.
-- **Windows (first CI run).** The official LLVM Windows installer ships no CMake development files, so the experimental job takes LLVM 20 and clang from conda-forge. In the first run, installing them worked (Clang 20.1.8) and the Visual Studio environment loaded, but **Configure failed**: with conda's `clang` on `PATH`, CMake chose clang for C and MSVC for C++ and refuses to mix them. The workflow now names the compilers explicitly (`cl` for building, `clang` for linking programs through `ZACK_CC`). That fix has not been run yet. Still open: whether the build and tests then pass, whether `clang` links the runtime built by MSVC, and whether building LLVM from source (cached) is the more reliable route.
+- **Windows (CI runs 1 and 2).** The official LLVM Windows installer ships no CMake development files, so the experimental job takes LLVM 20 and clang from conda-forge. In the first run, installing them worked (Clang 20.1.8) and the Visual Studio environment loaded, but **Configure failed**: with conda's `clang` on `PATH`, CMake chose clang for C and MSVC for C++ and refuses to mix them. The workflow now names the compilers explicitly (`cl` for building, `clang` for linking programs through `ZACK_CC`), and in run 2 Configure and Build passed and 31 of 32 tests passed, including the end-to-end programs that are linked with `clang` against the `cl`-built runtime. Still open: the last failing test (below), whether the Windows job should also treat warnings as errors, and whether building LLVM from source (cached) is a more reliable route than conda-forge.
+- **Windows text mode in test helpers.** The one failing Windows test (`runProcessCaptured feeds standard input`) printed two strings that looked identical. A C program's standard input and output are in text mode on Windows, so the test helper changed `\n` into `\r\n` itself. The helper now switches both streams to binary mode on Windows; this is a test-helper fix, and the launcher was not at fault. Not yet confirmed by CI.
+- **Linux CI is exposed to package-server outages.** In run 2 both Linux jobs failed with `Temporary failure resolving azure.archive.ubuntu.com` while installing LLVM, after about 11 minutes. Run 1 took 20 seconds for the same step. Re-running the failed jobs is the fix; if it recurs, add apt retries or cache the LLVM packages.
 
 ## Cross-cutting Rules
 
