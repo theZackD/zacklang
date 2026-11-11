@@ -11,7 +11,7 @@ The phased plan for building the ZackLang compiler (`zackc`). It is the checklis
 1. Work on one sub-phase at a time, in order, unless a note says otherwise.
 2. A sub-phase is **done** only when all of these hold:
    - its **Done when** condition is met;
-   - its **Tests** exist and pass in CI on every supported platform (D45);
+   - its **Tests** exist and pass on macOS and Windows (D52). Linux also runs in CI and is tracked in the platform table below, but it does not block progress until there is a working language;
    - the docs it touches are updated (the reference, grammar, guide or examples), doc-first when the language changes;
    - any design change is recorded in `DECISIONS.md`;
    - the code contains no debug printing to standard output, no `exit()` inside library code, no global mutable state and no unexplained `TODO`.
@@ -25,7 +25,7 @@ The phased plan for building the ZackLang compiler (`zackc`). It is the checklis
 
 | Phase | Name | Milestone | Status |
 |-------|------|-----------|--------|
-| 0 | Foundations and spikes | G0: toolchain proven on all platforms | [~] |
+| 0 | Foundations and spikes | G0: toolchain proven (macOS and Windows required, Linux tracked) | [x] |
 | 1 | Common infrastructure | | [ ] |
 | 2 | Lexer | | [ ] |
 | 3 | AST and parser | | [ ] |
@@ -38,7 +38,15 @@ The phased plan for building the ZackLang compiler (`zackc`). It is the checklis
 | 10 | Performance and release quality | **v0.1 release** | [ ] |
 | 11 | Path to self-hosting | **M4**: the compiler compiles itself | [ ] |
 
-**Current phase: 0, in progress.** CI run 1 (commit `9008e6b`): macOS and Linux passed, the Linux sanitizer job found a real bug (fixed). CI run 2 (commit `e683024`): macOS passed; Windows configured, built, and passed 31 of 32 tests (the failure was a bug in a test helper, fixed, awaiting re-run); both Linux jobs failed only because Ubuntu's package servers were unreachable, so the sanitizer fix is not yet confirmed. Items 0.1 to 0.5 stay `[~]`: by the rules above they only become `[x]` once CI passes on every platform. Gate G0 (0.7) stays open until Windows is fully green.
+**Platform status (D52).** CI runs on every push; macOS and Windows have to stay green, and Linux is checked again later.
+
+| Platform | Latest result | Notes |
+|----------|---------------|-------|
+| macOS arm64 | green in CI runs 1, 2 and 3 | required |
+| Windows x86-64 | green in run 3, all 32 tests | required: kept green from now on. The CI job is still labelled experimental: LLVM 20 and clang from conda-forge, MSVC `cl`; does not yet treat warnings as errors |
+| Linux x86-64 | plain build green in run 1; sanitizer job red in run 1 (a real bug, since fixed); in runs 2 and 3 both jobs never got past installing LLVM because Ubuntu's package servers were unreachable | the sanitizer fix is not yet confirmed |
+
+**Current phase: 1 (next).** Phase 0 is done under the policy in D52. Phase 1 has not been started; work resumes there. Details of what was found are in [Build and Toolchain](compiler_architecture.md#build-and-toolchain).
 
 **Why this order.** The front end (phases 1 to 3) is finished first because it is well specified and has no external dependency. Phase 4 then builds a thin, complete compiler for the numeric subset, so there is a real working compiler early (the priority from the start of the project). Later phases widen the language one feature group at a time, always end to end (parse, check, generate, run, test) rather than building a whole stage at a time.
 
@@ -46,32 +54,33 @@ The phased plan for building the ZackLang compiler (`zackc`). It is the checklis
 
 Goal: prove the toolchain works on macOS, Linux and Windows before writing real compiler code.
 
-- [~] **0.1 Repository skeleton** (S). CMake project, C++20 for the compiler, C11 for the runtime, the directory layout from the architecture doc, strict warnings, `.gitignore`, `.clang-format`.
+- [x] **0.1 Repository skeleton** (S). CMake project, C++20 for the compiler, C11 for the runtime, the directory layout from the architecture doc, strict warnings, `.gitignore`, `.clang-format`.
   - Done when: an empty `zackc` builds with one command on each platform.
   - Tests: build only.
-  - Status: macOS arm64 verified (Apple clang 21, warnings as errors). Linux verified by CI run 1; Windows: built and 31 of 32 tests passed in run 2.
-- [~] **0.2 Test infrastructure** (M). A unit test framework; a golden-file runner (compare tool output with an expected file); an end-to-end runner (compile a `.zl`, run it, compare standard output and exit code with expected files); everything wired into `ctest`.
+  - Status: macOS arm64 verified (Apple clang 21, warnings as errors). Also green on Windows (CI run 3) and on Linux's plain build (run 1).
+- [x] **0.2 Test infrastructure** (M). A unit test framework; a golden-file runner (compare tool output with an expected file); an end-to-end runner (compile a `.zl`, run it, compare standard output and exit code with expected files); everything wired into `ctest`.
   - Done when: one sample of each test kind passes under `ctest`.
   - Tests: the samples themselves.
-  - Status: macOS verified (decisions D48, D49): Catch2 unit tests, golden tests and end-to-end tests all run under `ctest`, and the C++ referee has tests proving it fails on wrong expectations. Linux verified by CI run 1; Windows: built and 31 of 32 tests passed in run 2.
-- [~] **0.3 LLVM 20 integration** (M). CMake finds LLVM 20 headers and libraries on each OS and links the C API.
+  - Status: macOS verified (decisions D48, D49): Catch2 unit tests, golden tests and end-to-end tests all run under `ctest`, and the C++ referee has tests proving it fails on wrong expectations. Also green on Windows (CI run 3) and on Linux's plain build (run 1).
+- [x] **0.3 LLVM 20 integration** (M). CMake finds LLVM 20 headers and libraries on each OS and links the C API.
   - Done when: a test program prints the LLVM version string on each platform.
   - Tests: that program (`zackc --version`) and a unit test of the pinned major version.
-  - Status: macOS verified (LLVM 20.1.6). Linux verified by CI run 1; Windows: built and 31 of 32 tests passed in run 2. Decision D50.
-- [~] **0.4 Backend spike** (M). Using only the C API, build `main` returning `40 + 2`, emit an object file and textual IR, link with the system compiler.
+  - Status: macOS verified (LLVM 20.1.6). Also green on Windows (CI run 3) and on Linux's plain build (run 1). Decision D50.
+- [x] **0.4 Backend spike** (M). Using only the C API, build `main` returning `40 + 2`, emit an object file and textual IR, link with the system compiler.
   - Done when: the produced executable exits with code 42, and notes on how awkward the C API felt are written down.
   - Tests: end-to-end test of the exit code.
-  - Status: macOS verified; notes are in the architecture doc (Build and Toolchain). Linux verified by CI run 1; Windows: built and 31 of 32 tests passed in run 2.
-- [~] **0.5 Runtime spike** (S). A `libzackrt` with `zack_print_i32` and `zack_panic`; the spike module calls them.
+  - Status: macOS verified; notes are in the architecture doc (Build and Toolchain). Also green on Windows (CI run 3) and on Linux's plain build (run 1).
+- [x] **0.5 Runtime spike** (S). A `libzackrt` with `zack_print_i32` and `zack_panic`; the spike module calls them.
   - Done when: a program prints `42`; another exits with code 101 and a message on standard error.
   - Tests: end-to-end tests of both.
-  - Status: macOS verified. Linux verified by CI run 1; Windows: built and 31 of 32 tests passed in run 2.
-- [~] **0.6 Continuous integration** (M). CI on macOS, Linux and Windows: build, run all tests.
+  - Status: macOS verified. Also green on Windows (CI run 3) and on Linux's plain build (run 1).
+- [x] **0.6 Continuous integration** (M). CI on macOS, Linux and Windows: build, run all tests.
   - Done when: green on all three. The working link command and the source of LLVM 20 on Windows are written in the architecture doc.
   - Tests: CI itself.
-  - Status: two runs so far. Run 1 (commit `9008e6b`): macOS passed, Linux passed, Linux sanitizers failed on one test and found a real bug (an LLVM message released with the wrong function; fixed), Windows failed at Configure because CMake mixed clang and MSVC (fixed in the workflow). Run 2 (commit `e683024`): macOS passed; Windows configured, built and passed 31 of 32 tests (the failure was a text-mode bug in a test helper; fixed, awaiting re-run); both Linux jobs failed while installing LLVM because Ubuntu's package servers were unreachable, so they need a re-run. Details in the architecture doc, Build and Toolchain.
-- [ ] **0.7 Gate G0** (S). Decide with evidence: keep the LLVM C API (D3) or switch `Backend` to the C++ API; confirm the link strategy (D45); confirm Windows is practical.
+  - Status: done under D52. Three runs: macOS green every time; Windows green in run 3 after two fixes (compiler selection, a text-mode bug in a test helper); Linux plain build green in run 1, its sanitizer job found a real bug (fixed, unconfirmed), and Linux jobs in runs 2 and 3 never got past installing LLVM because of Ubuntu package-server outages. Not done: apt retries or LLVM package caching for Linux, and warnings-as-errors for the Windows job.
+- [x] **0.7 Gate G0** (S). Decide with evidence: keep the LLVM C API (D3) or switch `Backend` to the C++ API; confirm the link strategy (D45); confirm Windows is practical.
   - Done when: D3 and D45 are confirmed or amended in the decision log and the architecture doc.
+  - Status: evidence in hand. The LLVM C API worked on macOS (every run), Windows (run 3) and Linux (run 1); the `Backend` is 229 lines behind a header with no LLVM includes; nothing argued for the C++ API. **D3 stands.** The link strategy (D51) worked on macOS and Windows. Windows is practical with LLVM from conda-forge, but its job stays experimental.
 
 ## Phase 1: Common Infrastructure
 
